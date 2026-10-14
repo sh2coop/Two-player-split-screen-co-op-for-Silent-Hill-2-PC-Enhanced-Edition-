@@ -1,0 +1,6 @@
+out/
+*.asi
+*.exe
+*.zip
+*.log
+*.dds
