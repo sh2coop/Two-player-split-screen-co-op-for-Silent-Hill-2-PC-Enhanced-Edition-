@@ -1,59 +1,118 @@
 # Silent Hill 2 (PC) – two-player co-op mod
 
-A plugin for the PC version of Silent Hill 2 (with the fan-made
-[Enhanced Edition]([https://enhanced.townofsilenthill.com/](https://enhanced.townofsilenthill.com/SH2/)) installed) that puts a second James into the
-game for a second player: keyboard + controller or two controllers, split screen (side by side or top
-and bottom), one shared story. Player 2 joins and leaves at any time; while he is not in, the game is
-unchanged.
+A plugin for the PC version of Silent Hill 2 that puts a second James into the game for a second
+player: keyboard + controller or two controllers, split screen (side by side or top and bottom), one
+shared story. Player 2 joins and leaves at any time; while he is not in, the game is unchanged.
+
+It runs on top of the fan-made [Silent Hill 2: Enhanced Edition](https://enhanced.townofsilenthill.com/SH2/),
+which you install first (see below).
 
 It is a work in progress. The whole game has been played through with it, but expect rough edges.
 
 **This repository contains no files from the game or from the Enhanced Edition** – only the mod's own
-source code. You need your own copy of Silent Hill 2 (PC) with the Enhanced Edition installed.
+source code. You need your own copy of Silent Hill 2 (PC).
 
 ## What you need
 
-- Silent Hill 2 (PC) with the Enhanced Edition installed (`SH2EEsetup.exe` from the Enhanced Edition
-  project), and nothing else added to it. The mod was made for the Enhanced Edition's exe 1.0 and its
-  "SH2 Enhancements" module 3.0.2218.0; it checks the exe when the game starts and does nothing on any
-  other exe.
--Link to Silent Hill 2 Enhanced: https://enhanced.townofsilenthill.com/SH2/
+- A copy of Silent Hill 2 for PC (the 2001/2002 PC release, also called "Restless Dreams" or
+  "Director's Cut").
+- The **Silent Hill 2: Enhanced Edition** installed on it: https://enhanced.townofsilenthill.com/SH2/
+  (download `SH2EEsetup.exe` from that page and follow its instructions). The mod was made for the
+  Enhanced Edition's exe 1.0 and its "SH2 Enhancements" module 3.0.2218.0; it checks the exe when the
+  game starts and does nothing on any other exe.
+- Nothing else added to the game. Other plugins (`.asi` files) and wrapper DLLs hook the same game code
+  the co-op hooks: the installer refuses to install over them, and bug reports are only useful from a
+  clean Enhanced Edition install. If you want other mods too, keep a separate clean copy of the game for
+  co-op.
 - A second input device. Controllers are read as XInput (Xbox-style) pads; the keyboard counts as a
   device too, so keyboard + one pad works.
 
-Please use a clean install of the Enhanced Edition. Other plugins (`.asi`) and wrapper DLLs hook the
-same game code the co-op hooks; the installer refuses to install over them, and bug reports are only
-useful from a clean install.
+## Install – step by step
 
-## Install (players)
+**1. Install the game and the Enhanced Edition first.**
+Install Silent Hill 2 (PC), then run `SH2EEsetup.exe` from
+https://enhanced.townofsilenthill.com/SH2/ and let it install everything it offers. Start the game once
+and make sure it runs. Note where the game is installed: the folder that contains `sh2pc.exe`
+(for example `C:\Games\Silent Hill 2`). You need that folder in step 3.
 
-Download the zip from the Releases page, unzip it, double-click **Install co-op.exe**, start the game.
-The title screen says CO-OP under the logo when the mod is loaded. Everything else (controls, settings,
-updating, removing, troubleshooting) is in `sh2coop README.txt`, which is also inside the zip.
+**2. Download the mod.**
+Go to the [Releases page](https://github.com/sh2coop/Silent-Hill-2-Restless-Dreams-PC-CO-OP-Mod-Built-upon-Enhanced-Edition-/releases)
+and download the newest `SH2 co-op mod <build>.zip`. Unzip it anywhere – your Downloads folder is fine.
+You get `Install co-op.exe`, `sh2coop.asi`, `sh2coop.ini`, `sh2coop_check.exe`, `README.txt` and
+`VERSION.txt`.
 
-What the installer does, and all it does: it copies the mod's files (`sh2coop.asi`, `sh2coop.ini`,
+**3. Run the installer.**
+Double-click **Install co-op.exe**.
+- If Windows shows "Windows protected your PC", click **More info**, then **Run anyway**. The
+  installer is not signed; that is all the warning means.
+- A window opens: **choose your Silent Hill 2 folder** – the folder from step 1 that contains
+  `sh2pc.exe` – and click OK. (You can skip this window by unzipping the mod straight into the game
+  folder, or by dragging the game folder onto `Install co-op.exe`.)
+- If the game is under `C:\Program Files`, Windows will not let the installer write there: it says so
+  and stops. Right-click `Install co-op.exe`, choose **Run as administrator**, and run it again.
+- Answer **Y** when it asks "Install?". It copies the mod's files into the game folder, switches plugin
+  loading on in the Enhanced Edition's `d3d8.ini`, checks everything, and ends with **READY**.
+
+**4. Start the game.**
+Start Silent Hill 2 as usual. The title screen says **CO-OP** under the logo when the mod is loaded.
+Start or load a game, then player 2 presses **G** on the keyboard or **BACK + START** together on a
+controller to join as James 2. The screen splits. Press **F8** (or L3 + R3) to change the split
+layout.
+
+What the installer does – and all it does: it copies the mod's own files (`sh2coop.asi`, `sh2coop.ini`,
 `sh2coop_check.exe`, its README and VERSION) into the game folder and changes one line in the Enhanced
 Edition's `d3d8.ini` (`LoadPlugins = 1`, with a backup kept as `d3d8.ini.bak-before-coop`). It never
 touches saves or game files, and it stops before changing anything if it finds other plugins or DLLs the
 Enhanced Edition does not ship.
 
-## Controls (short version)
+**To update:** download the new zip, unzip it, run its `Install co-op.exe` again and choose **U**.
+**To remove:** run `Install co-op.exe` again and choose **R** – it deletes the mod's own files and sets
+`LoadPlugins` back as it was. (Or just rename `sh2coop.asi` to `sh2coop.asi.off`.)
+
+The full player instructions (every control, every setting, troubleshooting) are in `README.txt`
+inside the zip – the same file as `sh2coop README.txt` in this repository.
+
+## Controls
 
 | | |
 |---|---|
 | Join as James 2 | `G` on the keyboard, or BACK + START together on a controller |
-| Leave | hold the same keys for about a second |
-| Regroup (James 2 to James 1) | `Z`, or BACK alone on James 2's controller |
+| Leave | hold the same keys for about a second while James 2 is in |
+| Regroup (James 2 jumps to James 1) | `Z`, or BACK alone on James 2's controller |
 | James 1 to James 2 | LT + RT + LB + RB together on James 1's controller |
-| Split screen | `F8`, or L3 + R3: side by side → top and bottom → off |
-| Swap devices / reset | `F6` / `F7` |
-| Status line into the log | `F10` |
+| Split screen | `F8`, or L3 + R3 (both sticks pressed in): side by side → top and bottom → off |
+| Swap the two players' devices / reset to auto | `F6` / `F7` |
+| Write a status line into the log | `F10` (press it when something odd happens) |
+
+Who controls whom: with the default `auto` setting, the device that presses **join** becomes James 2's;
+James 1 keeps the rest. So with keyboard + one controller, whoever presses join on the controller is
+James 2 and the keyboard player is James 1 (or the other way round). This can also be set in
+`sh2coop.ini` or in Options > Game Options > Co-op Options in the game.
 
 James 1 plays exactly as the normal game on his own device; James 2 uses the game's own control layout
-on his. Only James 1 uses the pause menu and the inventory. James 2 cannot be grabbed by enemies; when
-his health runs out he is out for a few seconds and comes back beside James 1. A few parts of the story
-are James 1's alone (the rowboat, the Nightmare Hotel finale and the final boss arenas): James 2 is
-brought along and cannot start anything there, so he can't change the ending.
+(Options > Control Options) on his. Only James 1 uses the pause menu and the inventory; James 2's Map
+button opens the map for him. James 2 cannot be grabbed by enemies; when his health runs out he is out
+for a few seconds and comes back beside James 1. A few parts of the story are James 1's alone (the
+rowboat, the Nightmare Hotel finale and the final boss arenas): James 2 is brought along and cannot
+start anything there, so he can't change the ending.
+
+## Settings
+
+`sh2coop.ini` next to the mod: who controls which James (`[input]`), the split-screen layout
+(`[split]`), and `[coop]` switches for troubleshooting (weapon copy, enemy targeting, James 2 using
+doors/items, red jacket, own bone slots, flashlight, title screen, texture dumps). Every setting is
+explained in the file itself.
+
+## If something goes wrong
+
+1. Make sure it is a clean Enhanced Edition install: one of the first lines of `sh2coop.log` (in the
+   game folder) says either "a clean Enhanced Edition install" or "OTHER CODE in the game folder: ...".
+   With the second one, move those files out and try again before reporting.
+2. Double-click `sh2coop_check.exe` in the game folder: it only reads your files and writes a report,
+   `sh2coop_check.txt`, that ends with READY or lists what to fix. After the first start it should say
+   "N of N hooks installed" (both numbers the same).
+3. Open an issue here with `sh2coop.log` (the previous run is kept as `sh2coop - <date> <time>.log`)
+   and `sh2coop_check.txt`, and say what you were doing.
 
 ## Building from source
 
@@ -75,20 +134,6 @@ The build needs nothing from the game.
 - `sh2coop_title.c` – the co-op title screen. The CO-OP lettering and the recoloured background are
   made at run time from the player's own Enhanced Edition title files; no artwork is shipped.
 - `sh2coop_setup.c` – `Install co-op.exe` (default) and `sh2coop_check.exe` (`-DCHECK_ONLY`).
-
-## Settings
-
-`sh2coop.ini` next to the mod: who controls which James (`[input]`), the split-screen layout
-(`[split]`), and `[coop]` switches for troubleshooting (weapon copy, enemy targeting, James 2 using
-doors/items, red jacket, own bone slots, flashlight, title screen, texture dumps). All documented in the
-file.
-
-## Reporting problems
-
-Send `sh2coop.log` (from the game folder; the previous run is kept as `sh2coop - <date> <time>.log`)
-and `sh2coop_check.txt`, and say what you were doing. One of the first lines of the log says whether the
-game folder is a clean Enhanced Edition install; reports from installs with other plugins can't be
-looked into.
 
 ## Legal
 
