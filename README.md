@@ -1,7 +1,7 @@
 # Silent Hill 2 (PC) – two-player co-op mod
 
 A plugin for the PC version of Silent Hill 2 (with the fan-made
-[Enhanced Edition](https://enhanced.townofsilenthill.com/) installed) that puts a second James into the
+[Enhanced Edition]([https://enhanced.townofsilenthill.com/](https://enhanced.townofsilenthill.com/SH2/)) installed) that puts a second James into the
 game for a second player: keyboard + controller or two controllers, split screen (side by side or top
 and bottom), one shared story. Player 2 joins and leaves at any time; while he is not in, the game is
 unchanged.
