@@ -17,6 +17,7 @@ source code. You need your own copy of Silent Hill 2 (PC) with the Enhanced Edit
   project), and nothing else added to it. The mod was made for the Enhanced Edition's exe 1.0 and its
   "SH2 Enhancements" module 3.0.2218.0; it checks the exe when the game starts and does nothing on any
   other exe.
+-Link to Silent Hill 2 Enhanced: https://enhanced.townofsilenthill.com/SH2/
 - A second input device. Controllers are read as XInput (Xbox-style) pads; the keyboard counts as a
   device too, so keyboard + one pad works.
 
