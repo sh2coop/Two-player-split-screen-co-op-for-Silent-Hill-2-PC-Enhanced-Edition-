@@ -89,6 +89,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stddef.h>
+#include "sh2coop_ce.h"
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -336,14 +337,16 @@ static int s_inject_action;     /* give James 1 one Action press after this fram
 static volatile const char *s_phase = "start";   /* what the mod (or the game) was doing: written into crash reports */
 static volatile int s_in_hook;
 
-static void Log(const char *fmt, ...)
+static void vLog_fwd(const char *fmt, va_list ap)
 {
     if (!s_log) return;
     SYSTEMTIME t; GetLocalTime(&t);
     fprintf(s_log, "%02d:%02d:%02d.%03d f%05lu ", t.wHour, t.wMinute, t.wSecond, t.wMilliseconds, (unsigned long)(s_frame % 100000));
-    va_list ap; va_start(ap, fmt); vfprintf(s_log, fmt, ap); va_end(ap);
+    vfprintf(s_log, fmt, ap);
     fputc('\n', s_log); fflush(s_log);
 }
+void ce_log(const char *fmt, ...) { va_list ap; va_start(ap, fmt); vLog_fwd(fmt, ap); va_end(ap); }
+static void Log(const char *fmt, ...) { va_list ap; va_start(ap, fmt); vLog_fwd(fmt, ap); va_end(ap); }
 
 /* ===================== save / load James's state ===================== */
 static void save_in(InState *s)
@@ -623,6 +626,7 @@ static void load_ini(HMODULE self)
     GetPrivateProfileStringA("input", "james2", "auto", v, sizeof v, path); s_cfg[1] = parse_src(v, SRC_AUTO);
     apply_cfg();
     Log("input assignment (%s): %sJames 1 = %s, James 2 = %s", path, s_auto ? "auto (whoever presses join is James 2); until then " : "", kSrcName[s_asg[0]], kSrcName[s_asg[1]]);
+    ce_load(path, s_opt_look);                                   /* CE: [look] colours (defaults = the red jacket / brown hair James 2 had) */
 }
 
 /* ---- second controller: opened through the game's own dinput8.dll (Xidi), so it gets the same mapping as pad 1 ---- */
@@ -797,7 +801,13 @@ static void assign_from_join(void)
 static const char *kMenuName[] = { "Keyboard", "Controller 1", "Controller 2", "Keyboard + Controller 1", "Keyboard + Controller 2", "Auto" };
 static const int kMenu1[] = { SRC_AUTO, SRC_KBPAD1, SRC_PAD1, SRC_KB, SRC_KBPAD2, SRC_PAD2 };
 static const int kMenu2[] = { SRC_AUTO, SRC_PAD2, SRC_KB, SRC_PAD1 };
-static int s_coop_page, s_coop_sel;          /* our own page, shown instead of the main options page */
+static char s_dir[MAX_PATH];                 /* the mod's folder (defined with the look diagnostics below) */
+static int s_coop_page, s_coop_sel;          /* our own page, shown instead of the main options page (2 = Appearance, CE) */
+static int s_app_sel, s_app_who; static float s_app_yaw;
+#define APP_PREVIEW_X 400                    /* CE: preview rectangle in the menu's 640x480 units */
+#define APP_PREVIEW_Y 60
+#define APP_PREVIEW_W 170
+#define APP_PREVIEW_H 330             /* CE: Appearance page row (0 = which James, 1.. = parts) and the James being edited */
 #define F_OPT_HANDLER ((VoidFn)0x00462E50)
 #define SITE_OPT_HANDLER 0x00469734u
 #define MASK_CANCEL (*(u32 *)0x00932C7C)
@@ -907,12 +917,79 @@ static void __cdecl opt_handler_hook(void)
     int cancel = F_VIN_HELD(0, MASK_CANCEL, (int)MASK_CANCEL >> 31) || (game_focused() && key(VK_ESCAPE));
     { XGP g; if (read_pad(0, &g) && (g.wButtons & XB_B)) cancel = 1; }
     int cancel_hit = cancel && !prev_cancel; prev_cancel = cancel;
+    if (s_coop_page == 2) {                                   /* CE: the Appearance page */
+        if (cancel_hit) { s_coop_page = 1; F_SFX(SND_ENTER, 1.0f, 0); Log("menu: appearance closed"); return; }
+        int up = F_VIN_HELD(0, 0x4000001, 0) || F_VIN_EDGE(1), down = F_VIN_HELD(0, 0x8000002, 0) || F_VIN_EDGE(2);
+        int left = F_VIN_HELD(0, 0x2000004, 0) || F_VIN_EDGE(4), right = F_VIN_HELD(0, 0x1000008, 0) || F_VIN_EDGE(8) || menu_confirm();
+        if (down) { s_app_sel = (s_app_sel + 1) % (CE_PARTS + 1); F_SFX(SND_MOVE, 1.0f, 0); }
+        else if (up) { s_app_sel = (s_app_sel + CE_PARTS) % (CE_PARTS + 1); F_SFX(SND_MOVE, 1.0f, 0); }
+        else if (left || right) {
+            if (s_app_sel == 0) { s_app_who ^= 1; F_SFX(SND_MOVE, 1.0f, 0); }
+            else { ce_cycle(s_app_who, s_app_sel - 1, left ? -1 : +1); F_SFX(SND_MOVE, 1.0f, 0); }
+        }
+        return;
+    }
     if (cancel_hit) { s_coop_page = 0; F_SFX(SND_ENTER, 1.0f, 0); Log("menu: co-op options closed"); return; }
-    /* rows: 0 James 1, 1 James 2, 2 Split screen (P33) */
-    if (F_VIN_HELD(0, 0x8000002, 0) || F_VIN_EDGE(2)) { s_coop_sel = (s_coop_sel + 1) % 3; F_SFX(SND_MOVE, 1.0f, 0); }
-    else if (F_VIN_HELD(0, 0x4000001, 0) || F_VIN_EDGE(1)) { s_coop_sel = (s_coop_sel + 2) % 3; F_SFX(SND_MOVE, 1.0f, 0); }
-    else if (F_VIN_HELD(0, 0x2000004, 0) || F_VIN_EDGE(4)) { if (s_coop_sel == 2) { split_cycle(-1, "menu"); F_SFX(SND_MOVE, 1.0f, 0); } else menu_cycle(s_coop_sel, -1); }
-    else if (F_VIN_HELD(0, 0x1000008, 0) || F_VIN_EDGE(8) || menu_confirm()) { if (s_coop_sel == 2) { split_cycle(+1, "menu"); F_SFX(SND_MOVE, 1.0f, 0); } else menu_cycle(s_coop_sel, +1); }
+    /* rows: 0 James 1, 1 James 2, 2 Split screen (P33), 3 Appearance (CE) */
+    if (F_VIN_HELD(0, 0x8000002, 0) || F_VIN_EDGE(2)) { s_coop_sel = (s_coop_sel + 1) % 4; F_SFX(SND_MOVE, 1.0f, 0); }
+    else if (F_VIN_HELD(0, 0x4000001, 0) || F_VIN_EDGE(1)) { s_coop_sel = (s_coop_sel + 3) % 4; F_SFX(SND_MOVE, 1.0f, 0); }
+    else if (s_coop_sel == 3 && (menu_confirm() || F_VIN_HELD(0, 0x1000008, 0) || F_VIN_EDGE(8))) {
+        s_coop_page = 2; s_app_sel = 1; s_app_yaw = 3.14159265f; F_SFX(SND_ENTER, 1.0f, 0); Log("menu: appearance opened (preview %s)", ce_preview_status());
+    }
+    else if (F_VIN_HELD(0, 0x2000004, 0) || F_VIN_EDGE(4)) { if (s_coop_sel == 2) { split_cycle(-1, "menu"); F_SFX(SND_MOVE, 1.0f, 0); } else if (s_coop_sel < 2) menu_cycle(s_coop_sel, -1); }
+    else if (F_VIN_HELD(0, 0x1000008, 0) || F_VIN_EDGE(8) || menu_confirm()) { if (s_coop_sel == 2) { split_cycle(+1, "menu"); F_SFX(SND_MOVE, 1.0f, 0); } else if (s_coop_sel < 2) menu_cycle(s_coop_sel, +1); }
+}
+/* CE: the Appearance page - rows on the left, the James being edited turning slowly on the right */
+static int s_app_px, s_app_py, s_app_pw, s_app_ph, s_app_pending;
+typedef HRESULT (STDMETHODCALLTYPE *EndSceneFn)(IDirect3DDevice8 *);
+static EndSceneFn s_endscene_orig;
+static HRESULT STDMETHODCALLTYPE endscene_hook(IDirect3DDevice8 *dev)
+{
+    if (s_app_pending) { s_app_pending = 0; ce_preview_draw(dev, s_app_who, s_app_px, s_app_py, s_app_pw, s_app_ph, s_app_yaw); }
+    return s_endscene_orig(dev);
+}
+static void hook_endscene(void)
+{
+    static int done; IDirect3DDevice8 *dev = D3D_DEVICE;
+    if (done || !dev) return;
+    done = 1;
+    void **vt = *(void ***)dev; int slot = offsetof(IDirect3DDevice8Vtbl, EndScene) / sizeof(void *);
+    DWORD old;
+    if (!VirtualProtect(&vt[slot], sizeof(void *), PAGE_EXECUTE_READWRITE, &old)) { Log("look preview: EndScene hook failed"); return; }
+    s_endscene_orig = (EndSceneFn)vt[slot]; vt[slot] = (void *)endscene_hook;
+    VirtualProtect(&vt[slot], sizeof(void *), old, &old);
+    Log("look preview: drawing at EndScene (slot %d)", slot);
+}
+static void appearance_draw(void)
+{
+    #define AP_LABEL_X 0x9C
+    #define AP_VALUE_X 0xB9
+    menu_text("APPEARANCE", 0x100, 0x34, 0x100, 0x3F, 0x3F, 0x3F, 0xFF);
+    for (int row = 0; row <= CE_PARTS; row++) {
+        const char *label = row == 0 ? "Editing" : ce_part_name[row - 1];
+        const char *val = row == 0 ? (s_app_who ? "James 2" : "James 1") : ce_palette[ce_color[s_app_who][row - 1]].name;
+        int y = 0x64 + 0x1B * (row + 1), sel = s_app_sel == row;
+        menu_text(label, AP_LABEL_X, y, 0x200, 0x3F, 0x3F, 0x3F, 0x60);
+        if (sel) menu_text(label, AP_LABEL_X - 2, y, 0x200, 0x3F, 0x3F, 0x3F, 0xFF);
+        menu_text(val, AP_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, sel ? 0xFF : 0x60);
+        if (sel) menu_text(val, AP_VALUE_X - 2, y, 0, 0x3F, 0x3F, 0x3F, 0xFF);
+    }
+    const char *help = s_app_sel == 0 ? "Left / right: which James to dress" : "Left / right: next colour (saved at once)";
+    if (!ce_preview_load(s_dir)) help = "No preview: James's model file was not found";
+    menu_text(help, 0x46, 0x18B, 0, 0x3F, 0x3F, 0x3F, 0xFF);
+    /* the preview: the menu lays out in 640x480 units over the 4:3 middle of the screen; the model gets the right third */
+    IDirect3DDevice8 *dev = D3D_DEVICE;
+    if (!dev) return;
+    int W = *(int *)0xA33480, H = *(int *)0xA33484;
+    IDirect3DSurface8 *rt = NULL; D3DSURFACE_DESC rd;
+    if (dev->lpVtbl->GetRenderTarget(dev, &rt) == D3D_OK && rt) { if (rt->lpVtbl->GetDesc(rt, &rd) == D3D_OK) { W = (int)rd.Width; H = (int)rd.Height; } rt->lpVtbl->Release(rt); }
+    float u = H / 480.0f; int x0 = (int)((W - 640.0f * u) * 0.5f);
+    int px = x0 + (int)(APP_PREVIEW_X * u), py = (int)(APP_PREVIEW_Y * u), pw = (int)(APP_PREVIEW_W * u), ph = (int)(APP_PREVIEW_H * u);
+    if (px < 0) px = 0; if (py < 0) py = 0; if (px + pw > W) pw = W - px; if (py + ph > H) ph = H - py;
+    s_app_yaw += 0.012f; if (s_app_yaw > 6.2831853f) s_app_yaw -= 6.2831853f;
+    /* drawn at EndScene (after the menu's own 2D records, which would otherwise paint over him) */
+    hook_endscene();
+    s_app_px = px; s_app_py = py; s_app_pw = pw; s_app_ph = ph; s_app_pending = 1;
 }
 /* replaces the call to the options page drawing */
 static void __cdecl opt_draw_hook(void)
@@ -937,6 +1014,7 @@ static void __cdecl opt_draw_hook(void)
        40 characters (~385 units from x 0x46). */
     #define CO_LABEL_X 0xB4
     #define CO_VALUE_X 0xD1
+    if (s_coop_page == 2) { appearance_draw(); return; }
     menu_text("CO-OP OPTIONS", 0x100, 0x34, 0x100, 0x3F, 0x3F, 0x3F, 0xFF);
     for (int row = 0; row < 2; row++) {
         char label[16]; sprintf(label, "James %d", row + 1);
@@ -955,12 +1033,19 @@ static void __cdecl opt_draw_hook(void)
         menu_text(kSplitMenu[s_split_cfg], CO_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, sel ? 0xFF : 0x60);
         if (sel) menu_text(kSplitMenu[s_split_cfg], CO_VALUE_X - 2, y, 0, 0x3F, 0x3F, 0x3F, 0xFF);
     }
+    {   /* CE: Appearance row (row 4) */
+        int y = 0x64 + 0x1B * 4, sel = s_coop_sel == 3;
+        menu_text("Appearance", CO_LABEL_X, y, 0x200, 0x3F, 0x3F, 0x3F, 0x60);
+        if (sel) menu_text("Appearance", CO_LABEL_X - 2, y, 0x200, 0x3F, 0x3F, 0x3F, 0xFF);
+        menu_text("Clothes and hair colours", CO_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, sel ? 0xFF : 0x60);
+        if (sel) menu_text("Clothes and hair colours", CO_VALUE_X - 2, y, 0, 0x3F, 0x3F, 0x3F, 0xFF);
+    }
     /* which physical controller is which: holding any button lights its row up */
     int held = pad_held_now();
     { static DWORD last; DWORD t = GetTickCount(); if (t - last > 2000) { last = t; s_padnames_tried = 0; load_padnames(); } }
     for (int i = 0; i < 2; i++) {
         char label[24], value[40]; sprintf(label, "Controller %d", i + 1);
-        int y = 0x64 + 0x1B * (i + 4), on = held == i + 1;
+        int y = 0x64 + 0x1B * (i + 5), on = held == i + 1;
         XGP g; int present = read_pad(i, &g);
         if (i < s_padnames) {
             const char *n = s_padname[i];
@@ -973,7 +1058,8 @@ static void __cdecl opt_draw_hook(void)
         menu_text(value, CO_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, on ? 0xFF : 0x60);
     }
     const char *help;
-    if (s_coop_sel == 2) help = s_split_cfg == SPLIT_OFF ? "One screen for both, James 1's camera" : "F8 or L3+R3 in game also switch it";
+    if (s_coop_sel == 3) help = "Press Enter: colours for James 1 and James 2";
+    else if (s_coop_sel == 2) help = s_split_cfg == SPLIT_OFF ? "One screen for both, James 1's camera" : "F8 or L3+R3 in game also switch it";
     else if (!src_works(s_asg[s_coop_sel])) help = s_coop_sel ? "That controller is not plugged in" : "Unplugged: James 1 uses the keyboard";
     else if (held) help = "Lit row = the controller you hold";
     else help = s_coop_sel ? "Auto: whoever presses Join is James 2" : "Hold a button to find a controller";
@@ -1336,9 +1422,10 @@ static void __cdecl attack_volumes_hook(void)
  * recoloured) and pixel by pixel for 32-bit textures, so any resolution works.  Region rules are in texture
  * fractions and match the James model's UV layout (all James model variants share ids 1239..1242). */
 static int bytes_are(u32 addr, const char *hex);
-int s_draw_p2;                              /* the work being drawn is James 2 (read by the asm stub) */
+int s_draw_p2;                              /* CE: the James being drawn, 1 or 2 (0 = someone else); read by the asm stub */
 typedef struct { u32 id; void *src; IDirect3DTexture8 *tex; u8 rec[0x100]; } TexCopy;
-static TexCopy s_texcopy[6]; static int s_tex_fail;
+static TexCopy s_texcopy[2][6]; static int s_tex_fail;
+static int s_look_who;                      /* CE: 0 / 1 = the colour set the recolour below uses */
 extern u8 *__cdecl tex_orig(u32 id);
 extern void tex_stub(void);
 __asm__(
@@ -1366,6 +1453,13 @@ __asm__(
 static inline u8 clamp8(float v) { return v < 0 ? 0 : v > 255 ? 255 : (u8)v; }
 /* the rule: id, position (fractions of the texture), colour in -> colour out; returns 0 if unchanged */
 static int recolor(u32 id, float fx, float fy, u8 *r, u8 *g, u8 *b)
+{
+    int part = ce_part_of(id, fx, fy, *r, *g, *b);                    /* CE: part rules + palette shared with the preview */
+    if (part < 0 || !ce_color[s_look_who][part]) return 0;
+    ce_apply(ce_color[s_look_who][part], r, g, b);
+    return 1;
+}
+__attribute__((unused)) static int recolor_old(u32 id, float fx, float fy, u8 *r, u8 *g, u8 *b)
 {
     /* P17: rules re-made from the textures the PC game really loads (dumped in P16). Their layout differs from the
        Xbox model files the earlier rules were measured on (hands at the left edge of 1240, hair = right half of 1241). */
@@ -1452,7 +1546,6 @@ static IDirect3DTexture8 *make_copy(u32 id, IDirect3DTexture8 *src)
 }
 /* ---- P16 look diagnostics: save the game's James textures and our copies as .dds next to the mod, and log every
    texture the game binds while James 2 is drawn (anything that is not one of our copies is saved too) ---- */
-static char s_dir[MAX_PATH];
 static int save_dds(IDirect3DTexture8 *t, const char *name)
 {
     D3DSURFACE_DESC d; D3DLOCKED_RECT lr;
@@ -1491,7 +1584,7 @@ static HRESULT STDMETHODCALLTYPE settex_hook(IDirect3DDevice8 *dev, DWORD stage,
         if (!seen) {
             s_seen_tex[s_seen_n] = t; s_seen_stage[s_seen_n] = stage; s_seen_n++;
             int copy = -1;
-            for (int i = 0; i < 6; i++) if (t && (void *)s_texcopy[i].tex == (void *)t) copy = (int)s_texcopy[i].id;
+            for (int w = 0; w < 2; w++) for (int i = 0; i < 6; i++) if (t && (void *)s_texcopy[w][i].tex == (void *)t) copy = (int)s_texcopy[w][i].id;
             if (copy >= 0) Log("look: James 2 drawn with stage %lu = our copy of %d", (unsigned long)stage, copy);
             else {
                 Log("look: James 2 drawn with stage %lu = %p, NOT one of our copies", (unsigned long)stage, (void *)t);
@@ -1517,21 +1610,37 @@ static void hook_settex(void)
     Log("look: watching textures bound while James 2 is drawn (slot %d)", slot);
 }
 /* called from the asm stub while James 2 is drawn: a replacement record for James's textures, else NULL */
+static void look_drop(int who)                                        /* CE: colours changed - the copies are remade on the next draw */
+{
+    for (int i = 0; i < 6; i++) if (s_texcopy[who][i].tex) { s_texcopy[who][i].tex->lpVtbl->Release(s_texcopy[who][i].tex); s_texcopy[who][i].tex = NULL; }
+}
+int look_recolor_dxt5(int who, ce_u32 id, int w, int h, const ce_u8 *src, ce_u8 *dst, int dpitch)
+{
+    int keep = s_look_who; s_look_who = who;
+    int ok = recolor_level(id, D3DFMT_DXT5, w, h, src, ((w + 3) / 4) * 16, dst, dpitch);
+    s_look_who = keep;
+    return ok;
+}
 u8 *__cdecl tex_replace(u32 id)
 {
-    if (s_tex_fail > 8 || !s_opt_look) return NULL;
+    if (s_tex_fail > 8 || s_draw_p2 < 1 || s_draw_p2 > 2) return NULL;
     if (id < 1239 || id > 1242) return NULL;
+    int who = s_draw_p2 - 1;
+    if (!ce_any(who)) return NULL;
+    { static int seen[2]; if (seen[who] != ce_gen[who]) { seen[who] = ce_gen[who]; look_drop(who); } }
     u8 *rec = tex_orig(id);
     if (!rec) return NULL;
     IDirect3DTexture8 *src = *(IDirect3DTexture8 **)(rec + TEX_REC_D3D);
     if (!src) return NULL;
     TexCopy *e = NULL;
-    for (int i = 0; i < 6; i++) if (s_texcopy[i].id == id) e = &s_texcopy[i];
-    if (!e) for (int i = 0; i < 6; i++) if (!s_texcopy[i].id) { e = &s_texcopy[i]; e->id = id; break; }
+    for (int i = 0; i < 6; i++) if (s_texcopy[who][i].id == id) e = &s_texcopy[who][i];
+    if (!e) for (int i = 0; i < 6; i++) if (!s_texcopy[who][i].id) { e = &s_texcopy[who][i]; e->id = id; break; }
     if (!e) return NULL;
     if (e->src != src || !e->tex) {                                      /* first time, or the game reloaded the model */
         if (e->tex) { e->tex->lpVtbl->Release(e->tex); e->tex = NULL; }
+        s_look_who = who;
         e->tex = make_copy(id, src);
+        s_look_who = 0;
         if (!e->tex) { s_tex_fail++; return NULL; }
         e->src = src;
         { static int saved[4]; int k = (int)id - 1239;
@@ -1948,7 +2057,12 @@ static int patch_call6(u32 site, const char *expect_hex, void *target)
 static void __cdecl draw_work_hook(u8 *work, int arg)
 {
     if (s_active && work == s_p2c) hook_settex();
-    s_draw_p2 = (s_active && work && work == s_p2c);
+    /* P33t: which James is this?  In James 2's half of the split screen his block is swapped in, so PLAYER is
+       James 2 there and James 1's work is the one saved in s_p1 (the user saw James 1 in his own colours only in
+       James 1's half). */
+    u8 *j1w = (u8 *)PLAYER;
+    if (s_active && j1w == s_p2c) j1w = *(u8 **)s_p1.block;
+    s_draw_p2 = (s_active && work && work == s_p2c) ? 2 : (work && work == j1w && work != s_p2c && ce_any(0)) ? 1 : 0;
     int k = fl2_char_begin(work);
     F_DRAW_WORK(work, arg);
     fl2_char_end(k);
@@ -3734,7 +3848,7 @@ static void install(HMODULE self)
     char *dot = strrchr(path, '.'); if (dot) strcpy(dot, ".log");
     char kept[MAX_PATH + 64]; int kept_ok = keep_old_log(path, kept, sizeof kept);
     s_log = fopen(path, "w");
-    Log("sh2coop PC build P33r loaded (title screen: CO-OP under the logo, green background, dark red logo, white menu; split screen: side by side / top and bottom)");
+    Log("sh2coop PC build P33t loaded (P33s + James 1 keeps his Appearance colours in James 2's half of the split screen)");
     if (kept_ok) Log("the previous log was kept as \"%s\"", kept);
     log_other_code();
     AddVectoredExceptionHandler(1, crash_handler);

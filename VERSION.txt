@@ -1,10 +1,10 @@
-Silent Hill 2 co-op mod - build P33r
+Silent Hill 2 co-op mod - build P33t
 packaged 2026-10-15 (UTC)
 made for: Enhanced Edition exe 1.0 (sha1 3201a5e1029f3ae3b77770255dcbe10360b3cd09), SH2 Enhancements module 3.0.2218.0
 
 files (sha1):
-9a5e0c8c88cf3a47100feeaa0196b1916400d464  sh2coop.asi
-d9633878accad2156ff2f3b16992a93652f15797  sh2coop.ini
-e547d8198a30c32c58c4c481c3f02c2cf6dcf043  Install co-op.exe
-13afbc28f996daf23025b2755b8eae50fae402c4  sh2coop_check.exe
-e4c64e913377ddd58c843e1f6ae17548084a381b  README.txt
+d8a79f0aa20371f605e6243853363b82465196ce  sh2coop.asi
+3249f2367a8459c0fed6ef8ffd96ec2dfe24245e  sh2coop.ini
+27abd5a1553cf06562a46094ca6ce98bc788d1a9  Install co-op.exe
+ddee01062540e238e494c566fe82ad300a8b781b  sh2coop_check.exe
+63c3eb02e18934e1bd8ff427644e311416c65987  README.txt

@@ -82,6 +82,7 @@ The full player instructions (every control, every setting, troubleshooting) are
 | Split screen | `F8`, or L3 + R3 (both sticks pressed in): side by side → top and bottom → off |
 | Swap the two players' devices / reset to auto | `F6` / `F7` |
 | Write a status line into the log | `F10` (press it when something odd happens) |
+| Clothes and hair colours | Options > Game Options > Co-op Options > **Appearance** |
 
 Who controls whom: with the default `auto` setting, the device that presses **join** becomes James 2's;
 James 1 keeps the rest. So with keyboard + one controller, whoever presses join on the controller is
@@ -100,12 +101,22 @@ started by James 1. A few parts of the story are James 1's alone (the rowboat, t
 finale and the final boss arenas): James 2 is brought along and cannot start anything there, so he
 can't change the ending.
 
+## Appearance
+
+Options > Game Options > Co-op Options > Appearance lets you pick a colour for the jacket, shirt, jeans,
+boots and hair of James 1 and of James 2 separately (22 named colours; "Original" is the game's own).
+A 3D James on the right of the page shows the result as you change it, on the title screen as well as
+in the pause menu. Choices are saved at once to `sh2coop.ini` (`[look]`). The default is James 2 in a
+red jacket with dark brown hair so the two are easy to tell apart. The colours are not new textures:
+the mod recolours James's own textures while keeping their shading, and the preview is drawn from
+James's own model file in your game folder, so nothing is shipped for it.
+
 ## Settings
 
 `sh2coop.ini` next to the mod: who controls which James (`[input]`), the split-screen layout
-(`[split]`), and `[coop]` switches for troubleshooting (weapon copy, enemy targeting, James 2 using
-doors/items, red jacket, own bone slots, flashlight, title screen, texture dumps). Every setting is
-explained in the file itself.
+(`[split]`), the Appearance colours (`[look]`), and `[coop]` switches for troubleshooting (weapon copy,
+enemy targeting, James 2 using doors/items, red jacket, own bone slots, flashlight, title screen, texture
+dumps). Every setting is explained in the file itself.
 
 ## If something goes wrong
 
@@ -135,6 +146,9 @@ and `VERSION.txt` are committed here too, so that "Download ZIP" gives players a
 - `sh2coop.c` – the mod: James 2 (a second player work driven by the game's own James code on a
   swapped copy of the player block), input routing for two devices, enemy targeting, grab/hold rules,
   co-op interaction rules, the bone-pool handling, the log.
+- `sh2coop_ce.c` – the Appearance page: the colour rules and palette, the `[look]` settings, and the
+  3D preview (reads `data\chr\jms\hhh_jms.mdl` from the player's own game folder and draws it with the
+  game's Direct3D device).
 - `sh2coop_d9.c` – the split-screen render path (Direct3D 9 side, through the Enhanced Edition's
   d3d8 → d3d9 layer).
 - `sh2coop_title.c` – the co-op title screen. The CO-OP lettering and the recoloured background are

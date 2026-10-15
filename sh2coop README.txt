@@ -92,14 +92,24 @@ CONTROLS
                           cutscene triggers) can only be started by James 1 - James 2 gets a short "no"
                           sound. When a scene takes James 2 out for a moment, he comes back where he
                           stood if James 1 has not moved, otherwise beside James 1.
+  Appearance ............ Options > Game Options > Co-op Options > Appearance: pick a colour for the
+                          jacket, shirt, jeans, boots and hair of James 1 and of James 2 (22 named colours,
+                          "Original" = the game's own). A 3D James on the right of the page shows the
+                          result as you change it, on the title screen too. Saved at once to sh2coop.ini
+                          ([look]); the default is James 2 in a red jacket with dark brown hair.
   F10 ................... writes a STATUS line into sh2coop.log - press it when something odd happens,
                           it helps us find the cause.
 
 SETTINGS (sh2coop.ini, next to the mod)
   [input] james1 / james2 = auto | keyboard | pad1 | pad2 | keyboard+pad1 | keyboard+pad2
   [split] layout = side | top | off
+  [look]  james1_jacket / james1_shirt / james1_jeans / james1_boots / james1_hair and the same for james2:
+          a colour name from the Appearance page (Original, Black, Dark grey, Grey, White, Red, Dark red,
+          Orange, Yellow, Green, Dark green, Olive, Blue, Navy, Light blue, Purple, Pink, Brown, Dark brown,
+          Blond, Ginger, Silver). Written by the game when you use the page.
   [coop]  switches (1 = on, 0 = off) for troubleshooting: weapon (James 2 carries James 1's weapon),
-          enemies_target_nearer, james2_interact (James 2 can use doors/items/save points), james2_red_jacket,
+          enemies_target_nearer, james2_interact (James 2 can use doors/items/save points), james2_red_jacket (the
+          default look of James 2 when the [look] section does not exist yet),
           james2_own_bones, james2_flashlight, title_screen. If something misbehaves, set one to 0 and tell
           us which one fixed it.
 
