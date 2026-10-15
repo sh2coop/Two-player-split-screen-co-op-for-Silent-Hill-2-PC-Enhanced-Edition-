@@ -91,9 +91,14 @@ James 2 and the keyboard player is James 1 (or the other way round). This can al
 James 1 plays exactly as the normal game on his own device; James 2 uses the game's own control layout
 (Options > Control Options) on his. Only James 1 uses the pause menu and the inventory; James 2's Map
 button opens the map for him. James 2 cannot be grabbed by enemies; when his health runs out he is out
-for a few seconds and comes back beside James 1. A few parts of the story are James 1's alone (the
-rowboat, the Nightmare Hotel finale and the final boss arenas): James 2 is brought along and cannot
-start anything there, so he can't change the ending.
+for a few seconds and comes back beside James 1.
+
+James 2 can pick up items and read locked-door and examine messages where he stands: nobody is
+teleported, the item goes into the shared inventory. A door that really opens, and a save point, bring
+James 1 over to him. Scenes and scripted things (holes, ladders, puzzles, cutscene triggers) can only be
+started by James 1. A few parts of the story are James 1's alone (the rowboat, the Nightmare Hotel
+finale and the final boss arenas): James 2 is brought along and cannot start anything there, so he
+can't change the ending.
 
 ## Settings
 

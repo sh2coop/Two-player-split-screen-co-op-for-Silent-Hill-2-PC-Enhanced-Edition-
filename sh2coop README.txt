@@ -84,6 +84,14 @@ CONTROLS
   Map ................... James 2's Map button opens the map for him. Only James 1 uses the pause menu
                           and the inventory. James 2 cannot be grabbed by enemies; when his health runs
                           out he is out for a few seconds and comes back beside James 1.
+  Doors and items ....... James 2 picks up items (health drinks, first aid kits, ammo, keys...) and reads
+                          locked-door and examine messages where he stands: nobody is teleported, the item
+                          goes into the shared inventory, James 1 just does the pick-up motion where he is
+                          and James 2 closes the message. A door that really opens, and a save point, still
+                          bring James 1 over to him. Scenes and scripted things (holes, ladders, puzzles,
+                          cutscene triggers) can only be started by James 1 - James 2 gets a short "no"
+                          sound. When a scene takes James 2 out for a moment, he comes back where he
+                          stood if James 1 has not moved, otherwise beside James 1.
   F10 ................... writes a STATUS line into sh2coop.log - press it when something odd happens,
                           it helps us find the cause.
 

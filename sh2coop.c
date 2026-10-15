@@ -1,5 +1,5 @@
 /*
- * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33q
+ * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33r
  * Built from sh2coop.c + sh2coop_d9.c (the Direct3D 9 part of the split screen) + sh2coop_title.c (the title screen):
  *   i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c -ldinput8 -ldxguid
  *
@@ -169,6 +169,7 @@ typedef void (__cdecl *VoidFn)(void);
 #define F_REMOVE       ((int (__cdecl *)(u8 *, int, int))0x0053A700)
 #define F_BONES_NEEDED ((int (__cdecl *)(int))0x00537D70)
 #define F_TELEPORT     ((void (__cdecl *)(u8 *, float *, float))0x005396C0)
+#define F_EVBIT_USE    ((int (__cdecl *)(int))0x0049E970)             /* P33r: the search's one-shot event-bit use (kinds 5..10, word1 bit 3) */
 #define F_TRIG_SEARCH  ((int (__cdecl *)(int, int, int))0x0048E070)   /* (action, use-item evid, probe only) -> trigger idx / 0x400+item / -1; reads PLAYER */
 #define STAGE_IDX      (*(u8 *)0x01DBBF80)                              /* current stage 1..0x3A */
 #define ACTION_EDGE    (*(u8 *)0x01FB7F0C)                              /* James 1's "action pressed this frame" (block +0x28C) */
@@ -306,6 +307,9 @@ static u8 *s_w2[2]; static int s_w2_cool;
    (0x4A9210: pending damage +0x11C > 0, damage-type gates), then heals James 1, 120 frames, sets flag 0x1FC ->
    triggers 8 (script) -> 9 (door) -> the ending. Cloud: shooting her lying body started it at once; action did not. */
 static int s_final_out, s_final_said;
+/* P33r: where James 2 stood when a scene / script took him out; he comes back there (not onto James 1) if James 1 is
+   still in the same room and has not moved */
+static int s_ret_ok, s_ret_stage, s_ret_room; static float s_ret_pos[4], s_ret_rot[4], s_ret_p1[3];
 #define FINAL_AREA() (STAGE_IDX >= 48 && STAGE_IDX <= 51)
 static void w2_drop(const char *why);
 static int s_opt_weapon = 1, s_opt_target = 1, s_opt_interact = 1, s_opt_look = 1, s_opt_privbones = 1, s_opt_fl2 = 1, s_opt_title = 1, s_opt_dumps = 0;   /* sh2coop.ini [coop] switches for troubleshooting */   /* James 2's copies of James 1's weapon work(s): main and alt model */
@@ -2394,7 +2398,9 @@ static int split_wanted(u8 *p1)
         { s_split_why = "James 2 not in play"; return 0; }
     if (DEMO_ID != 0 || (DEMO_FLAGS & 0x40) || (GAME_FLAGS & 0x40)) { s_split_why = "cutscene"; return 0; }
     if (CAM_FLAGS & 3) { s_split_why = "scripted camera"; return 0; }
-    if (EV_KIND == 2) { s_split_why = "scene / script"; return 0; }
+    /* P33r: EV_KIND is the handler's sub-step, 2 = "running" for scripts (states 2/4) but also "message up" for the
+       short interactions (6/7/8/10/11), during which James 2 now stays (frozen) - keep the split for those */
+    if (EV_KIND == 2 && !(EV_STATE == 6 || EV_STATE == 7 || EV_STATE == 8 || EV_STATE == 10 || EV_STATE == 11)) { s_split_why = "scene / script"; return 0; }
     IDirect3DDevice8 *d = D3D_DEVICE; D3DVIEWPORT8 vp;
     if (!d || d->lpVtbl->GetViewport(d, &vp) != D3D_OK || vp.Width < 64 || vp.Height < 64) { s_split_why = "no usable screen"; return 0; }
     s_split_why = "on";
@@ -2764,6 +2770,7 @@ static void __cdecl pool_init_hook(void)
     s_p2c = NULL; s_active = 0; s_w2[0] = s_w2[1] = NULL;
     s_cam2_valid = 0; s_split_now = 0; s_downed = 0;
     s_final_out = 0;                                       /* P33o */
+    s_ret_ok = 0;                                          /* P33r */
     if (s_want) s_follow_timer = 60;
 }
 #define POOL_HEADROOM 24      /* free nodes left for the game's own spawns after James 2 / a weapon copy */
@@ -2874,6 +2881,9 @@ static void coop_spawn(u8 *p1, int quiet)
         }
     }
     spot_on(p1, pos); memcpy(rot, POSP(p1) + 4, 16);            /* on James 1's spot */
+    { int back = s_ret_ok && s_ret_stage == STAGE_IDX && dist2(POSP(p1), s_ret_p1) < 1000.0f * 1000.0f && room_of(p1) == s_ret_room;
+      if (back) { memcpy(pos, s_ret_pos, 16); memcpy(rot, s_ret_rot, 16); Log("James 2 comes back where he stood before the scene (James 1 has not moved)"); }
+      s_ret_ok = 0; }                                          /* P33r */
     u8 *owner = LIST_OWNER;
     save_state(&s_p1, 1);
     s_priv_hit = 0; s_priv_want = priv ? PRIV_J2 : 0;
@@ -3025,6 +3035,7 @@ static void p2_interact(u8 *p1)
     int vis_sw = s_split_now && s_vis2_ok; u8 keep_vis[VIS_SZ];
     if (vis_sw) { memcpy(keep_vis, VIS_LIST, VIS_SZ); memcpy(VIS_LIST, s_vis2, VIS_SZ); }
     int idx = F_TRIG_SEARCH(1, 0, 1);
+    u32 cc68 = *(u32 *)0x0094CC68, cc6c = *(u32 *)0x0094CC6C, cc70 = *(u32 *)0x0094CC70;   /* P33r: the found trigger's copies */
     if (vis_sw) memcpy(VIS_LIST, keep_vis, VIS_SZ);
     if (s_item_probe_ok) { memcpy((void *)0x0048E388, "\x0f\x85\x8c\x01\x00\x00", 6); }
     load_state(&s_p1, 0);
@@ -3032,6 +3043,44 @@ static void p2_interact(u8 *p1)
     if (vis_sw) s_vis_union = 1;          /* James 1 runs it in the next event main: both halves count as on screen */
     int kind = -1, act = -1;
     if (idx < 0x400) { const u32 *t = (const u32 *)(*(u32 *)STAGE_BLOCK) + idx * 4; kind = t[1] >> 28; act = t[2] >> 28; }
+    /* P33r (user: "doors that won't open or flag a scene, and first aid / health drinks, won't teleport either
+       player"). The event main (0x48E610) maps a found trigger's action to an event state: 1/2 -> 1 (flag),
+       3 -> 2 (script), 4 -> 5 (door), 5 -> 3 (door + script), 6 -> 6 (message), 7/8/9 -> 7 (message + sound: locked /
+       broken / generic), 10 -> 9 (save point); an item (0x400 + i) -> 8 (pick-up). The flag, message and pick-up
+       handlers (0x48BB10, 0x48BB90, 0x48BD10, 0x48BEF0) only lock / animate PLAYER and read the trigger through
+       EV_TRIGGER (the copies 0x94CC68/6C/70 are written by the search but read by nobody; set anyway) - none of them
+       reads or writes a position. So those are started right here, for James 1
+       where he stands, exactly as the event main would start them (same globals), and nobody is moved. Real doors
+       (4/5: the search only finds them when their conditions say they open) and save points still bring James 1
+       over; scripts (3) - scenes, holes, puzzles, examine scripts - run on James 1 and may move him, so James 2
+       cannot start them at all: James 1 walks there himself. */
+    { int st = 0;
+      if (idx >= 0x400) st = 8;
+      else if (act == 1 || act == 2) st = 1;
+      else if (act == 6) st = 6;
+      else if (act >= 7 && act <= 9) st = 7;
+      if (st) {
+          if (EV_STATE != 0) return;
+          if (*(u32 *)0x01FB7CE4 >= 0x11) return;                 /* the game's own Action gate (0x53AFF0): James 1 mid-attack etc. - James 2 presses again */
+          if (idx < 0x400) {                                      /* what the non-probe search does on a hit, kinds 5..10 */
+              const u32 *t = (const u32 *)(*(u32 *)STAGE_BLOCK) + idx * 4;
+              if (kind >= 5 && kind <= 10 && (t[1] & 8)) F_EVBIT_USE((int)((t[1] >> 4) & 0xFF));
+          }
+          *(u32 *)0x0094CC68 = cc68; *(u32 *)0x0094CC6C = cc6c; *(u32 *)0x0094CC70 = cc70;
+          EV_TRIGGER = idx; EV_STATE = st; EV_KIND = 0; *(int *)0x01F7A948 = 0; *(int *)0x01F7A944 = 0;
+          s_room_cool = 60;
+          s_map_p2 = 1; s_map_seen = 0; s_map_wait = 0; s_map_armed = 0;   /* the message it shows is James 2's to close */
+          s_ui_what = idx >= 0x400 ? "item screen" : "message";
+          Log("James 2 used %s %d (kind %d action %d): event %d started where both stand - nobody moved", idx >= 0x400 ? "item" : "trigger",
+              idx >= 0x400 ? idx - 0x400 : idx, kind, act, st);
+          return;
+      }
+      if (act != 4 && act != 5 && act != 10) {
+          static int last = -2;
+          if (idx != last) Log("James 2 at trigger %d (kind %d action %d): a scene / script - only James 1 can start it (nobody moved)", idx, kind, act);
+          last = idx; sfx(SND_FAILED); s_room_cool = 30;
+          return;
+      } }
     float pos[4]; spot_on(s_p2c, pos); float yaw = YAW(s_p2c);
     { int sk;                                                   /* P33k: never carry James 1 past a walk-in scene on the way */
       if (walkin_on_path(p1, pos, idx, &sk)) {
@@ -3433,11 +3482,19 @@ static void coop_tick(void)
        messages) only lock James 1 for a moment: James 2 stands still.  Scripts (kind 2), doors (3/5), the boat and
        anything else that takes James 1's control still make him step out and come back after. */
     { static int hold; int ev = EV_STATE;
-      int shortlock = EV_KIND != 2 && (ev >= 6 && ev <= 11);
+      /* P33r: the sub-step (EV_KIND) is 2 while a message is up / an item is being taken, so the old "EV_KIND != 2"
+         test let these freeze for one frame only and then took James 2 out and put him back on James 1. Messages,
+         pick-ups and the "too dark" / flashlight messages freeze him whatever the sub-step; the save point (9) still
+         takes him out (he comes back where he stood). */
+      int shortlock = ev == 6 || ev == 7 || ev == 8 || ev == 10 || ev == 11;
       if (shortlock) hold = 10; else if (hold > 0) hold--;                     /* a few frames of slack while the handler unlocks */
       s_freeze = s_active && (shortlock || (hold > 0 && ev == 0 && (FLAGS(p1) & F_LOCKED))); }
     if (s_active && !s_freeze && (EV_KIND == 2 || (FLAGS(p1) & F_ESCORT) ||
                      (!(FLAGS(p1) & F_GRABBED) && (!(FLAGS(p1) & F_CONTROL) || (FLAGS(p1) & F_LOCKED))))) {
+        if (s_p2c && *(float *)(s_p2c + W_HP) > 0.0f && !p1_only_area() && !(FLAGS(p1) & F_ESCORT)) {   /* P33r */
+            memcpy(s_ret_pos, POSP(s_p2c), 12); s_ret_pos[3] = 1.0f; memcpy(s_ret_rot, POSP(s_p2c) + 4, 16);
+            memcpy(s_ret_p1, POSP(p1), 12); s_ret_stage = STAGE_IDX; s_ret_room = room_of(s_p2c); s_ret_ok = 1;
+        } else s_ret_ok = 0;
         p2_remove(EV_KIND == 2 ? "scene / script" : (FLAGS(p1) & F_ESCORT) ? "James 1 is in the boat" : "James 1 lost control");
         s_follow_timer = 30;
     }
@@ -3677,7 +3734,7 @@ static void install(HMODULE self)
     char *dot = strrchr(path, '.'); if (dot) strcpy(dot, ".log");
     char kept[MAX_PATH + 64]; int kept_ok = keep_old_log(path, kept, sizeof kept);
     s_log = fopen(path, "w");
-    Log("sh2coop PC build P33q loaded (title screen: CO-OP under the logo, green background, dark red logo, white menu; split screen: side by side / top and bottom)");
+    Log("sh2coop PC build P33r loaded (title screen: CO-OP under the logo, green background, dark red logo, white menu; split screen: side by side / top and bottom)");
     if (kept_ok) Log("the previous log was kept as \"%s\"", kept);
     log_other_code();
     AddVectoredExceptionHandler(1, crash_handler);
