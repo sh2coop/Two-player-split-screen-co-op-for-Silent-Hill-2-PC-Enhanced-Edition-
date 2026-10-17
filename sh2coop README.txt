@@ -97,6 +97,10 @@ CONTROLS
                           "Original" = the game's own). A 3D James on the right of the page shows the
                           result as you change it, on the title screen too. Saved at once to sh2coop.ini
                           ([look]); the default is James 2 in a red jacket with dark brown hair.
+                          The Character row plays each James as James, Maria, Eddie or Angela: the
+                          game still runs James underneath (same moves and weapons), only the drawing
+                          changes, from the character's own model in your game folder. Maria has her own
+                          colour rows (top, skirt, boots, hair). In cutscenes James is shown.
   F10 ................... writes a STATUS line into sh2coop.log - press it when something odd happens,
                           it helps us find the cause.
 
@@ -107,6 +111,8 @@ SETTINGS (sh2coop.ini, next to the mod)
           a colour name from the Appearance page (Original, Black, Dark grey, Grey, White, Red, Dark red,
           Orange, Yellow, Green, Dark green, Olive, Blue, Navy, Light blue, Purple, Pink, Brown, Dark brown,
           Blond, Ginger, Silver). Written by the game when you use the page.
+          james1_character / james2_character = James | Maria | Eddie | Angela;
+          james1_maria_top / _skirt / _boots / _hair (and james2_...) = Maria's colours, same colour names.
   [coop]  switches (1 = on, 0 = off) for troubleshooting: weapon (James 2 carries James 1's weapon),
           enemies_target_nearer, james2_interact (James 2 can use doors/items/save points), james2_red_jacket (the
           default look of James 2 when the [look] section does not exist yet),

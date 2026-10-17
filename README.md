@@ -82,7 +82,7 @@ The full player instructions (every control, every setting, troubleshooting) are
 | Split screen | `F8`, or L3 + R3 (both sticks pressed in): side by side → top and bottom → off |
 | Swap the two players' devices / reset to auto | `F6` / `F7` |
 | Write a status line into the log | `F10` (press it when something odd happens) |
-| Clothes and hair colours | Options > Game Options > Co-op Options > **Appearance** |
+| Clothes and hair colours, play as Maria / Eddie / Angela | Options > Game Options > Co-op Options > **Appearance** |
 
 Who controls whom: with the default `auto` setting, the device that presses **join** becomes James 2's;
 James 1 keeps the rest. So with keyboard + one controller, whoever presses join on the controller is
@@ -111,10 +111,19 @@ red jacket with dark brown hair so the two are easy to tell apart. The colours a
 the mod recolours James's own textures while keeping their shading, and the preview is drawn from
 James's own model file in your game folder, so nothing is shipped for it.
 
+The same page has a **Character** row: each James can be played as **James, Maria, Eddie or Angela**.
+The game still runs James underneath (same moves, collisions, health and weapons); only the drawing
+changes. The mod loads the character's own model from your game folder (`data\chr\mar\hhh_mar.mdl`,
+`data\chr\edi\hhh_edi.mdl`, `data\chr\agl\agl.mdl`) and bends it to James's pose every frame, with
+the fingers closed around every weapon and the pocket flashlight (and its light) on the character's
+chest. Maria and Angela use Maria's heel footsteps. Maria has her own colour rows (top, skirt, boots,
+hair); Eddie and Angela keep their own look. In cutscenes James is shown, so the story still makes
+sense. Saved as `james1_character` / `james2_character` (and `jamesN_maria_top/skirt/boots/hair`) in `[look]`.
+
 ## Settings
 
 `sh2coop.ini` next to the mod: who controls which James (`[input]`), the split-screen layout
-(`[split]`), the Appearance colours (`[look]`), and `[coop]` switches for troubleshooting (weapon copy,
+(`[split]`), the Appearance colours and characters (`[look]`), and `[coop]` switches for troubleshooting (weapon copy,
 enemy targeting, James 2 using doors/items, red jacket, own bone slots, flashlight, title screen, texture
 dumps). Every setting is explained in the file itself.
 
@@ -149,6 +158,10 @@ and `VERSION.txt` are committed here too, so that "Download ZIP" gives players a
 - `sh2coop_ce.c` – the Appearance page: the colour rules and palette, the `[look]` settings, and the
   3D preview (reads `data\chr\jms\hhh_jms.mdl` from the player's own game folder and draws it with the
   game's Direct3D device).
+- `sh2coop_chr.c` – playing as Maria, Eddie or Angela: reads the character's model file from the
+  player's own game folder, retargets it to James's skeleton every frame (limbs, grip frames, finger
+  curls that close on the weapon's shape, left-hand IK on two-handed weapons), skins and draws it, and
+  provides the weapon / flashlight / footstep adjustments the hooks in `sh2coop.c` use.
 - `sh2coop_d9.c` – the split-screen render path (Direct3D 9 side, through the Enhanced Edition's
   d3d8 → d3d9 layer).
 - `sh2coop_title.c` – the co-op title screen. The CO-OP lettering and the recoloured background are

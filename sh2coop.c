@@ -1,5 +1,5 @@
 /*
- * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33r
+ * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33u
  * Built from sh2coop.c + sh2coop_d9.c (the Direct3D 9 part of the split screen) + sh2coop_title.c (the title screen):
  *   i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c -ldinput8 -ldxguid
  *
@@ -90,6 +90,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include "sh2coop_ce.h"
+#include "sh2coop_chr.h"
+static int s_chr_sel[2];                     /* CS: character per James (CHR_JAMES = normal) */
 
 typedef unsigned char u8;
 typedef unsigned short u16;
@@ -302,6 +304,7 @@ int s_join_loud;                 /* the next join attempt was asked for by a key
 static int s_map_p2, s_map_seen, s_map_wait, s_map_armed;   /* a screen James 2 opened (map, save menu, message) */
 static const char *s_ui_what = "map";
 static u8 *s_w2[2]; static int s_w2_cool;
+static int chr_owner(u8 *work, u8 **james);   /* CS: James drawn as another character, or his weapon */
 /* P33o: Mary (0x206) defeated in the Mary / Maria arenas (stages 48-51): James 2 stays out until a load or until
    James 1 leaves those stages - the user's run had both Jameses on one spot after the post-fight scene.
    P33p, traced: the ending is NOT an examine. Mary's downed state 0x4B4CA0 (work+0xEC == 0xD) waits for a hit
@@ -330,6 +333,8 @@ int d9_get_rs(unsigned state, unsigned *v);
 void d9_set_rs(unsigned state, unsigned v);
 #ifdef SH2COOP_TEST_TOOLS
 typedef struct { u32 magic; volatile int cmd, done; float v[4]; int arg; } TestCmd;
+int s_tcap_arm, s_tcap_n, s_tcap_pc = -1, s_tcap_got; unsigned s_tcap_log[512][4]; float s_tcap_vsc[96 * 4];
+float s_tview[16]; int s_tview_on; float s_tview_fov = 0.5f;   /* cloud test build: close-up view for James 2's half */
 TestCmd s_tcmd = { 0x444D4354u, 0, 0, { 0, 0, 0, 0 }, 0 };   /* cloud test build only: the test harness writes here */
 #endif
 static int s_freeze;            /* James 1 is in a short interaction: James 2 stands still instead of leaving */
@@ -627,6 +632,15 @@ static void load_ini(HMODULE self)
     apply_cfg();
     Log("input assignment (%s): %sJames 1 = %s, James 2 = %s", path, s_auto ? "auto (whoever presses join is James 2); until then " : "", kSrcName[s_asg[0]], kSrcName[s_asg[1]]);
     ce_load(path, s_opt_look);                                   /* CE: [look] colours (defaults = the red jacket / brown hair James 2 had) */
+    for (int w = 0; w < 2; w++) {                                /* CS: [look] jamesN_character = James | Maria | Eddie | Angela */
+        char key[32], val[32]; snprintf(key, sizeof key, "james%d_character", w + 1);
+        GetPrivateProfileStringA("look", key, "James", val, sizeof val, path);
+        s_chr_sel[w] = 0;
+        for (int k = 0; k < CHR_COUNT; k++) if (!_stricmp(val, chr_name(k))) s_chr_sel[w] = k;
+        WritePrivateProfileStringA("look", key, chr_name(s_chr_sel[w]), path);
+    }
+    Log("characters: James 1 plays as %s, James 2 plays as %s", chr_name(s_chr_sel[0]), chr_name(s_chr_sel[1]));
+    chr_mcolor_load(path);                                       /* CS: [look] jamesN_maria_top / skirt / boots / hair */
 }
 
 /* ---- second controller: opened through the game's own dinput8.dll (Xidi), so it gets the same mapping as pad 1 ---- */
@@ -921,11 +935,23 @@ static void __cdecl opt_handler_hook(void)
         if (cancel_hit) { s_coop_page = 1; F_SFX(SND_ENTER, 1.0f, 0); Log("menu: appearance closed"); return; }
         int up = F_VIN_HELD(0, 0x4000001, 0) || F_VIN_EDGE(1), down = F_VIN_HELD(0, 0x8000002, 0) || F_VIN_EDGE(2);
         int left = F_VIN_HELD(0, 0x2000004, 0) || F_VIN_EDGE(4), right = F_VIN_HELD(0, 0x1000008, 0) || F_VIN_EDGE(8) || menu_confirm();
-        if (down) { s_app_sel = (s_app_sel + 1) % (CE_PARTS + 1); F_SFX(SND_MOVE, 1.0f, 0); }
-        else if (up) { s_app_sel = (s_app_sel + CE_PARTS) % (CE_PARTS + 1); F_SFX(SND_MOVE, 1.0f, 0); }
+        int nrows = (s_chr_sel[s_app_who] == CHR_MARIA ? CHR_MPARTS : CE_PARTS) + 2;
+        if (s_app_sel >= nrows) s_app_sel = nrows - 1;
+        if (down) { s_app_sel = (s_app_sel + 1) % nrows; F_SFX(SND_MOVE, 1.0f, 0); }
+        else if (up) { s_app_sel = (s_app_sel + nrows - 1) % nrows; F_SFX(SND_MOVE, 1.0f, 0); }
         else if (left || right) {
             if (s_app_sel == 0) { s_app_who ^= 1; F_SFX(SND_MOVE, 1.0f, 0); }
-            else { ce_cycle(s_app_who, s_app_sel - 1, left ? -1 : +1); F_SFX(SND_MOVE, 1.0f, 0); }
+            else if (s_app_sel == 1) {                            /* CS: character */
+                int k = s_chr_sel[s_app_who];
+                for (int t = 0; t < CHR_COUNT; t++) { k = (k + (left ? CHR_COUNT - 1 : 1)) % CHR_COUNT; if (k == CHR_JAMES || chr_ready(k)) break; }
+                s_chr_sel[s_app_who] = k;
+                char key[32]; snprintf(key, sizeof key, "james%d_character", s_app_who + 1);
+                if (s_ini[0]) WritePrivateProfileStringA("look", key, chr_name(k), s_ini);
+                Log("characters: James %d plays as %s", s_app_who + 1, chr_name(k));
+                F_SFX(SND_MOVE, 1.0f, 0);
+            }
+            else if (s_chr_sel[s_app_who] == CHR_JAMES) { ce_cycle(s_app_who, s_app_sel - 2, left ? -1 : +1); F_SFX(SND_MOVE, 1.0f, 0); }
+            else if (s_chr_sel[s_app_who] == CHR_MARIA && s_app_sel - 2 < CHR_MPARTS) { chr_mcolor_cycle(s_app_who, s_app_sel - 2, left ? -1 : +1); F_SFX(SND_MOVE, 1.0f, 0); }
         }
         return;
     }
@@ -945,7 +971,9 @@ typedef HRESULT (STDMETHODCALLTYPE *EndSceneFn)(IDirect3DDevice8 *);
 static EndSceneFn s_endscene_orig;
 static HRESULT STDMETHODCALLTYPE endscene_hook(IDirect3DDevice8 *dev)
 {
-    if (s_app_pending) { s_app_pending = 0; ce_preview_draw(dev, s_app_who, s_app_px, s_app_py, s_app_pw, s_app_ph, s_app_yaw); }
+    if (s_app_pending) { s_app_pending = 0;
+        if (s_chr_sel[s_app_who] != CHR_JAMES) chr_draw_preview(dev, s_chr_sel[s_app_who], s_app_who, s_app_px, s_app_py, s_app_pw, s_app_ph, s_app_yaw);
+        else ce_preview_draw(dev, s_app_who, s_app_px, s_app_py, s_app_pw, s_app_ph, s_app_yaw); }
     return s_endscene_orig(dev);
 }
 static void hook_endscene(void)
@@ -965,16 +993,20 @@ static void appearance_draw(void)
     #define AP_LABEL_X 0x9C
     #define AP_VALUE_X 0xB9
     menu_text("APPEARANCE", 0x100, 0x34, 0x100, 0x3F, 0x3F, 0x3F, 0xFF);
-    for (int row = 0; row <= CE_PARTS; row++) {
-        const char *label = row == 0 ? "Editing" : ce_part_name[row - 1];
-        const char *val = row == 0 ? (s_app_who ? "James 2" : "James 1") : ce_palette[ce_color[s_app_who][row - 1]].name;
+    for (int row = 0; row <= CE_PARTS + 1; row++) {
+        int ch = s_chr_sel[s_app_who], other = ch != CHR_JAMES, mar = ch == CHR_MARIA;
+        if (mar && row - 2 >= CHR_MPARTS) continue;                       /* Maria: four rows (top, skirt, boots, hair) */
+        const char *label = row == 0 ? "Editing" : row == 1 ? "Character" : mar ? chr_mpart_name[row - 2] : ce_part_name[row - 2];
+        const char *val = row == 0 ? (s_app_who ? "James 2" : "James 1") : row == 1 ? chr_name(ch)
+                        : mar ? ce_palette[chr_mcolor[s_app_who][row - 2]].name : other ? "-" : ce_palette[ce_color[s_app_who][row - 2]].name;
         int y = 0x64 + 0x1B * (row + 1), sel = s_app_sel == row;
         menu_text(label, AP_LABEL_X, y, 0x200, 0x3F, 0x3F, 0x3F, 0x60);
         if (sel) menu_text(label, AP_LABEL_X - 2, y, 0x200, 0x3F, 0x3F, 0x3F, 0xFF);
         menu_text(val, AP_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, sel ? 0xFF : 0x60);
         if (sel) menu_text(val, AP_VALUE_X - 2, y, 0, 0x3F, 0x3F, 0x3F, 0xFF);
     }
-    const char *help = s_app_sel == 0 ? "Left / right: which James to dress" : "Left / right: next colour (saved at once)";
+    const char *help = s_app_sel == 0 ? "Left / right: which James to dress" : s_app_sel == 1 ? "Play as James, Maria, Eddie or Angela"
+                     : s_chr_sel[s_app_who] == CHR_MARIA || s_chr_sel[s_app_who] == CHR_JAMES ? "Left / right: next colour (saved at once)" : "Colours are for James and Maria only";
     if (!ce_preview_load(s_dir)) help = "No preview: James's model file was not found";
     menu_text(help, 0x46, 0x18B, 0, 0x3F, 0x3F, 0x3F, 0xFF);
     /* the preview: the menu lays out in 640x480 units over the 4:3 middle of the screen; the model gets the right third */
@@ -1819,6 +1851,12 @@ HRESULT __stdcall dip_hook(IDirect3DDevice8 *d, D3DPRIMITIVETYPE t, UINT mi, UIN
         if (s_j2c_ok && fl2_pass_begin(d)) { d->lpVtbl->DrawIndexedPrimitive(d, t, mi, nv, si, pc); fl2_pass_end(d); }
         return D3D_OK;
     }
+#ifdef SH2COOP_TEST_TOOLS
+    if (s_tcap_arm) {   /* cloud test: record the draw calls of one frame and the vertex shader constants of one of them */
+        if (s_tcap_n < 512) { s_tcap_log[s_tcap_n][0] = t; s_tcap_log[s_tcap_n][1] = nv; s_tcap_log[s_tcap_n][2] = pc; s_tcap_log[s_tcap_n][3] = si; s_tcap_n++; }
+        if ((int)pc == s_tcap_pc && !s_tcap_got) { d->lpVtbl->GetVertexShaderConstant(d, 0, s_tcap_vsc, 96); s_tcap_got = 1; }
+    }
+#endif
     HRESULT hr = d->lpVtbl->DrawIndexedPrimitive(d, t, mi, nv, si, pc);
     if ((!s_fl2_defer || s_fl2_mode == 1) && s_j2c_ok && fl2_pass_begin(d)) { d->lpVtbl->DrawIndexedPrimitive(d, t, mi, nv, si, pc); fl2_pass_end(d); }
     return hr;
@@ -1851,6 +1889,7 @@ static void __cdecl shadow_cast_hook(int mode, u8 *slot, u8 *work)
     if (s_split_view == 1 && work)   /* P33: James 2's split view: his torch is the light, so James 1 is "the other James" */
         j2 = work == *(u8 **)s_p1.block || ((MODEL(work) & 0xFFC0) == 0x800 && *(u16 *)(work + W_INST) == 0);
     if (j2) { s_casts_j2++; if (s_dbg_noshadow_j2) return; } else s_casts_j1++;
+    if (work && chr_owner(work, NULL) >= 0) return;   /* CS: James's shadow shape would fall on the character (dark stripes) */
     ((void (__cdecl *)(int, u8 *, u8 *))0x00509C20)(mode, slot, work);
     if (s_active && work && (work == PLAYER || work == s_p2c)) shd_snap(&s_shd[work == s_p2c]);
 }
@@ -2044,6 +2083,20 @@ void __cdecl sel_hook(void *a, void *b)
     for (int i = drop; i + 1 < *cnt; i++) list[i] = list[i + 1];
     (*cnt)--;
 }
+#ifdef SH2COOP_TEST_TOOLS
+/* cloud test: the character primitive draw (0x501F21): record each call with the work being drawn and grab the vertex
+   shader constants of the one asked for */
+unsigned s_tcc_log[256][4]; int s_tcc_n, s_tcc_arm, s_tcc_pc = -1, s_tcc_got; u32 s_tcc_work; float s_tcc_vsc[96 * 4];
+HRESULT __stdcall chr_dip_cap(IDirect3DDevice8 *d, D3DPRIMITIVETYPE t, UINT mi, UINT nv, UINT si, UINT pc)
+{
+    if (s_tcc_arm) {
+        u32 w = *(u32 *)0x01F7FC64;
+        if (s_tcc_n < 256) { s_tcc_log[s_tcc_n][0] = w; s_tcc_log[s_tcc_n][1] = nv; s_tcc_log[s_tcc_n][2] = pc; s_tcc_log[s_tcc_n][3] = si; s_tcc_n++; }
+        if ((int)pc == s_tcc_pc && (!s_tcc_work || s_tcc_work == w) && !s_tcc_got) { d->lpVtbl->GetVertexShaderConstant(d, 0, s_tcc_vsc, 96); s_tcc_got = 1; }
+    }
+    return d->lpVtbl->DrawIndexedPrimitive(d, t, mi, nv, si, pc);
+}
+#endif
 static int patch_call6(u32 site, const char *expect_hex, void *target)
 {
     DWORD old;
@@ -2054,8 +2107,118 @@ static int patch_call6(u32 site, const char *expect_hex, void *target)
     FlushInstructionCache(GetCurrentProcess(), (void *)site, 6);
     return 1;
 }
+/* CS: is this work a James drawn as another character, or a weapon in such a James's hand?  Returns which James
+   (0 / 1, *james = his work) or -1.  Never in cutscenes (James is shown there). */
+static int chr_cut(void) { return *(int *)0x01F7A7C4 != 0 || (*(u32 *)0x01F7A7A4 & 0x40) || (*(u32 *)0x00932194 & 0x40); }
+static u8 *chr_james_work(int who)
+{
+    if (who == 1) return s_active ? s_p2c : NULL;
+    u8 *j1w = (u8 *)PLAYER;
+    if (s_active && j1w == s_p2c) j1w = *(u8 **)s_p1.block;
+    return j1w;
+}
+/* CS: the weapon a James holds right now (James 1: the game's weapon, instance 0; James 2: his copy), or NULL */
+static u8 *chr_weapon_of(int who)
+{
+    if (who == 1) { u8 *w = s_w2[0]; return w && is_in_list(w) && (FLAGS(w) & F_DRAWN) ? w : NULL; }
+    for (u8 *w = *(u8 **)0x01FB6984; w; w = *(u8 **)(w + W_NEXT)) {
+        u32 m = MODEL(w);
+        if (m >= 0x801 && m < 0x80C && w != s_w2[0] && w != s_w2[1] && *(u16 *)(w + W_INST) == 0 && (FLAGS(w) & F_DRAWN)) return w;
+    }
+    return NULL;
+}
+static int chr_owner(u8 *work, u8 **james)
+{
+    if (!work || chr_cut()) return -1;
+    u32 m = MODEL(work);
+    for (int who = 0; who < 2; who++) {
+        if (s_chr_sel[who] == CHR_JAMES) continue;
+        u8 *jw = chr_james_work(who);
+        if (!jw || (MODEL(jw) & 0xFF00) != 0x100) continue;
+        int mine = 0;
+        if (work == jw) mine = 1;
+        else if ((m >= 0x800 && m < 0x80C) || (m >= 0x820 && m < 0x82C)) {
+            int copy = work == s_w2[0] || work == s_w2[1];
+            mine = who == 1 ? copy : (!copy && *(u16 *)(work + W_INST) == 0 && !memcmp(work + 0x5C, jw + 0x5C, 64));
+        }
+        if (mine) { if (james) *james = jw; return who; }
+    }
+    return -1;
+}
+/* CS: replaces the call of the skinning-matrix build 0x509E50 (slot) in the character draw loop 0x50B980, which reads
+   the work's bone nodes (the work is in 0x1F7FC64): the weapon of a James drawn as another character is moved into
+   her hand for that build only, then its nodes are put back (the game's own uses of them stay James's) */
+/* CS: replaces the call of the player's flashlight update 0x536D70 in the post-think pass (0x5386DF; it sets the light
+   at player block +0x98 and the lens at +0xB8 from James's bones, then 0x512160 places the glow from +0xB8): for a James
+   drawn as another character both move to the flashlight on her chest */
+static void __cdecl chr_torch_hook(void)
+{
+    ((void (__cdecl *)(void))0x00536D70)();
+    u8 *w = (u8 *)PLAYER, *jw; float d[3];
+    int who = w ? chr_owner(w, &jw) : -1;
+    if (who < 0 || jw != w || !chr_torch_delta(s_chr_sel[who], w, chr_weapon_of(who), d)) return;
+    float *pl = (float *)0x01FB7D18, *lens = (float *)0x01FB7D38;
+    for (int i = 0; i < 3; i++) { pl[i] += d[i]; lens[i] += d[i]; }
+}
+/* CS: footsteps. James's step sounds come from 0x54AD50 (step timing from his animation frames, one sound per foot by
+   the floor material under it: foot probes at P+0x1D0 / P+0x1F8). The game's own playable Maria (model 0x10E) uses
+   0x549500 instead, with her own heel sounds 0x4A57..0x4A5E. Her timing tables are for her animations, so James's
+   timing is kept and only the two sound calls (0x54B3AB foot A, 0x54B355 foot B) are swapped for hers when the James
+   who is thinking plays as Maria or Angela (Angela has no step sounds of her own; Eddie keeps James's). */
+static int maria_step(int material)
+{
+    switch (material) {
+    case 1: return 0x4A5B; case 2: return 0x4A58; case 5: return 0x4A5E; case 6: return 0x4A5D;
+    case 7: return 0x4A5C; case 8: return 0x4A59; case 10: return 0x4A5A; default: return 0x4A57;
+    }
+}
+static int step_heels(void)
+{
+    u8 *pl = (u8 *)PLAYER;
+    int who = (s_active && pl == s_p2c) ? 1 : 0;
+    int k = s_chr_sel[who];
+    return (k == CHR_MARIA || k == CHR_ANGELA) && !chr_cut();
+}
+static int step_material(u32 hit, u32 ptr) { return *(int *)hit == 1 && *(u8 **)ptr ? *(int *)(*(u8 **)ptr + 8) : 0xC; }
+static int __cdecl step_sfx_a(int id, float vol, void *pos, int x)
+{
+    if (step_heels()) { int was = id; id = maria_step(step_material(0x01FB7E50, 0x01FB7E74));
+        static int said; if (!said) { said = 1; Log("characters: footstep sound 0x%x -> Maria's 0x%x", was, id); } }
+    return ((int (__cdecl *)(int, float, void *, int))0x00516E90)(id, vol, pos, x);
+}
+static int __cdecl step_sfx_b(int id, float vol, void *pos, int x)
+{
+    if (step_heels()) id = maria_step(step_material(0x01FB7E78, 0x01FB7E9C));
+    return ((int (__cdecl *)(int, float, void *, int))0x00516E90)(id, vol, pos, x);
+}
+static ChrWeaponSave s_wsave; static u8 *s_wsave_work;   /* weapon nodes moved for this draw (put back after it) */
+static int __cdecl chr_skin_hook(u8 *slot)
+{
+    u8 *work = *(u8 **)0x01F7FC64, *jw;
+    int who = work && (MODEL(work) & 0xFF00) == 0x800 ? chr_owner(work, &jw) : -1;
+    if (who < 0) return ((int (__cdecl *)(u8 *))0x00509E50)(slot);
+    if (s_wsave.n) chr_weapon_end(&s_wsave);
+    if (chr_weapon_begin(s_chr_sel[who], jw, work, &s_wsave)) s_wsave_work = work;
+    return ((int (__cdecl *)(u8 *))0x00509E50)(slot);
+}
 static void __cdecl draw_work_hook(u8 *work, int arg)
 {
+    {   /* CS: a James playing as another character: the mod draws her in his place (gameplay only, never in cutscenes) */
+        int who = (s_active && work && work == s_p2c) ? 1 : (work && work == (u8 *)PLAYER && work != s_p2c) ? 0 : -1;
+        if (who < 0 && s_active && work && PLAYER == s_p2c && work == *(u8 **)s_p1.block) who = 0;
+        int cut = *(int *)0x01F7A7C4 != 0 || (*(u32 *)0x01F7A7A4 & 0x40) || (*(u32 *)0x00932194 & 0x40);
+        if (who >= 0 && s_chr_sel[who] != CHR_JAMES && !cut && (MODEL(work) & 0xFF00) == 0x100) {
+            static int said[2];
+            if (chr_draw_world(D3D_DEVICE, s_chr_sel[who], work, chr_weapon_of(who), who)) {
+                if (!said[who]) { said[who] = 1; Log("characters: James %d drawn as %s", who + 1, chr_name(s_chr_sel[who])); }
+#ifdef SH2COOP_TEST_TOOLS
+                extern float chr_test_offset[3];
+                if (chr_test_offset[0] == 0 && chr_test_offset[1] == 0 && chr_test_offset[2] == 0)
+#endif
+                return;
+            }
+        }
+    }
     if (s_active && work == s_p2c) hook_settex();
     /* P33t: which James is this?  In James 2's half of the split screen his block is swapped in, so PLAYER is
        James 2 there and James 1's work is the one saved in s_p1 (the user saw James 1 in his own colours only in
@@ -2067,6 +2230,7 @@ static void __cdecl draw_work_hook(u8 *work, int arg)
     F_DRAW_WORK(work, arg);
     fl2_char_end(k);
     s_draw_p2 = 0;
+    if (s_wsave.n && s_wsave_work == work) { chr_weapon_end(&s_wsave); s_wsave_work = NULL; }   /* CS: weapon nodes back */
 }
 static int hook_tex_lookup(void)
 {
@@ -2455,6 +2619,9 @@ static int split_views(void)
     SKIP_ONCE = skip;                                 /* the newly equipped weapon stays hidden in both halves alike */
     dev_restore(d, &s_split_sv);
     s_split_view = 1;
+#ifdef SH2COOP_TEST_TOOLS
+    if (s_tview_on) { memcpy((void *)0x01F80E00, s_tview, 64); CAM_FOV = s_tview_fov; }   /* cloud test: close-up camera in the right half */
+#endif
     view_setup(d, 1);
     if (fog_ovr) FL_FOG_END = fog_upd;
     view_draw(1);
@@ -3845,10 +4012,11 @@ static void install(HMODULE self)
 {
     char path[MAX_PATH]; GetModuleFileNameA(self, path, MAX_PATH);
     strcpy(s_dir, path); { char *sl = strrchr(s_dir, '\\'); if (sl) sl[1] = 0; else s_dir[0] = 0; }
+    chr_set_dir(s_dir);
     char *dot = strrchr(path, '.'); if (dot) strcpy(dot, ".log");
     char kept[MAX_PATH + 64]; int kept_ok = keep_old_log(path, kept, sizeof kept);
     s_log = fopen(path, "w");
-    Log("sh2coop PC build P33t loaded (P33s + James 1 keeps his Appearance colours in James 2's half of the split screen)");
+    Log("sh2coop PC build P33u loaded (P33t + play as Maria, Eddie or Angela: Appearance > Character)");
     if (kept_ok) Log("the previous log was kept as \"%s\"", kept);
     log_other_code();
     AddVectoredExceptionHandler(1, crash_handler);
@@ -3873,6 +4041,11 @@ static void install(HMODULE self)
     n += patch_call(SITE_POST_ALL, 0x00538B40, (void *)post_update_all_hook);
     n += patch_call(SITE_ATK, 0x00543310, (void *)attack_volumes_hook);
     n += patch_call(SITE_DRAW_WORK, 0x0050B3D0, (void *)draw_work_hook);
+    if (patch_call(0x0050BA1F, 0x00509E50, (void *)chr_skin_hook)) n++;   /* CS: weapons into the character's hand */
+    if (patch_call(0x005386DF, 0x00536D70, (void *)chr_torch_hook)) n++;  /* CS: flashlight light + glow onto her chest */
+    { int a = patch_call(0x0054B3AB, 0x00516E90, (void *)step_sfx_a), b = a ? patch_call(0x0054B355, 0x00516E90, (void *)step_sfx_b) : 0;
+      if (a && !b) patch_call(0x0054B3AB, (u32)step_sfx_a, (void *)0x00516E90);
+      if (a && b) n++; }                                                  /* CS: Maria's heel steps for Maria / Angela */
     n += hook_tex_lookup();
     n += patch_jmp_raw(0x0048F810, "56578b7c240c", 6, (void *)spawn_guard);
     if (patch_call(0x0048E91E, 0x00476050, (void *)inv_queue_gate)) n++;
@@ -3897,6 +4070,9 @@ static void install(HMODULE self)
     if (!s_priv_ok) Log("private bone slots NOT installed (code differs): James 2 uses the game's pool with the P28 checks");
     /* P29: James 2's flashlight - all three world sites or none; the character part needs the world part */
     if (bytes_are(0x005B28B0, "81eca000000053558bac24ac000000") && bytes_are(0x005B4C58, "51ff921c010000") && bytes_are(0x005B062F, "50ff9218010000")) {
+#ifdef SH2COOP_TEST_TOOLS
+        patch_call6(0x00501F21, "ff911c010000", (void *)chr_dip_cap);
+#endif
         int a = patch_call6(0x005B4C59, "ff921c010000", (void *)dip_hook);
         int b = patch_call6(0x005B0630, "ff9218010000", (void *)dp_hook);
         int c = (a && b) ? patch_jmp_raw(0x005B28B0, "81eca0000000", 6, (void *)upl_hook_c) : 0;
@@ -3941,7 +4117,7 @@ static void install(HMODULE self)
         n += patch_call(SITE_CURSOR_A, 0x0045FA90, (void *)cursor_hook);
         n += patch_call(SITE_CURSOR_B, 0x0045FA90, (void *)cursor_hook);
     } else { s_rows_ok = 0; Log("options menu: code mismatch, not installed"); }
-    Log("%d of 44 hooks installed", n);
+    Log("%d of 47 hooks installed", n);
     load_ini(self);
     title_install(Log, s_opt_title);
     Log("James 2 uses the game's own control layout on his assigned device. G or BACK+START on any pad = join (auto: that device becomes James 2's), Z or BACK alone on his pad = regroup, his Map button = map, F6 = swap devices, Pad 1 LT+RT+LB+RB = James 1 to James 2, F9 = James 2's flashlight mode (after shadows / with the map / off), F10 = status line, F11 / F12 = shadow tests (all flashlight shadows off / James 2 as a shadow caster).");

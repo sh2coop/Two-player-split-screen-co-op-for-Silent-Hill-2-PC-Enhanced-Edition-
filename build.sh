@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 mkdir -p out/stage
-i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o out/sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c sh2coop_ce.c -ldinput8 -ldxguid
+i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o out/sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c sh2coop_ce.c sh2coop_chr.c -ldinput8 -ldxguid
 i686-w64-mingw32-gcc -O2 -Wall -Wextra -s -mconsole -static-libgcc -o "out/Install co-op.exe" sh2coop_setup.c -ladvapi32 -lole32 -lshell32
 i686-w64-mingw32-gcc -O2 -Wall -Wextra -s -mconsole -static-libgcc -DCHECK_ONLY -o out/sh2coop_check.exe sh2coop_setup.c -ladvapi32
 BUILD=$(strings out/sh2coop.asi | grep -o 'sh2coop PC build [A-Za-z0-9]*' | head -1 | awk '{print $4}')
