@@ -1,5 +1,5 @@
 /*
- * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33u
+ * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33v
  * Built from sh2coop.c + sh2coop_d9.c (the Direct3D 9 part of the split screen) + sh2coop_title.c (the title screen):
  *   i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c -ldinput8 -ldxguid
  *
@@ -2226,6 +2226,9 @@ static void __cdecl draw_work_hook(u8 *work, int arg)
     u8 *j1w = (u8 *)PLAYER;
     if (s_active && j1w == s_p2c) j1w = *(u8 **)s_p1.block;
     s_draw_p2 = (s_active && work && work == s_p2c) ? 2 : (work && work == j1w && work != s_p2c && ce_any(0)) ? 1 : 0;
+    /* P33v: a James who plays as Maria / Eddie / Angela is shown as plain James where the game draws James himself
+       (cutscenes): his Appearance colours belong to the James look he is not using, and the page hides them ("-") */
+    if (s_draw_p2 && s_chr_sel[s_draw_p2 - 1] != CHR_JAMES) s_draw_p2 = 0;
     int k = fl2_char_begin(work);
     F_DRAW_WORK(work, arg);
     fl2_char_end(k);
@@ -4016,7 +4019,7 @@ static void install(HMODULE self)
     char *dot = strrchr(path, '.'); if (dot) strcpy(dot, ".log");
     char kept[MAX_PATH + 64]; int kept_ok = keep_old_log(path, kept, sizeof kept);
     s_log = fopen(path, "w");
-    Log("sh2coop PC build P33u loaded (P33t + play as Maria, Eddie or Angela: Appearance > Character)");
+    Log("sh2coop PC build P33v loaded (P33u + a James playing as another character is plain James in cutscenes)");
     if (kept_ok) Log("the previous log was kept as \"%s\"", kept);
     log_other_code();
     AddVectoredExceptionHandler(1, crash_handler);
