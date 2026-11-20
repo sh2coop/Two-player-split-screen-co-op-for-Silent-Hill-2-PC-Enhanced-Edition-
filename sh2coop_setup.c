@@ -38,6 +38,7 @@
 #define MODULE_SHA1    "185111f8ada6c76a10ddd52fa3d67e623953f85c"   /* SH2 Enhancements module 3.0.2218.0 */
 #define MODULE_VER     "3.0.2218.0"
 #define XIDI_SHA1      "e25d5ef214ca77cb77a8dd16ffa079c985127a67"   /* the EE's Xidi dinput8.dll (Xidi SDL3 1.0.0 package) */
+#define XIDI_SHA1_B    "60c5e5a8e43d23974b9f22e4c0b8454e27e77889"   /* the Xidi the EE setup 1.1.8 installs (package 1.0.Win7) */
 /* The mod's build name is read from sh2coop.asi itself (its start-up log line "sh2coop PC build Pxx loaded" is a string
    inside the file), so this checker does not need to be rebuilt when a new mod build is dropped into the package. */
 
@@ -418,7 +419,7 @@ static int scan_code_mods(void)
     /* dinput8.dll: the mod opens the second controller through it, so it must be the EE's Xidi (or absent) */
     if (file_size(L"dinput8.dll", NULL)) {
         ver_info(L"dinput8.dll", name, sizeof name, ver, sizeof ver); sha1_file(L"dinput8.dll", hex);
-        if (!strcmp(hex, XIDI_SHA1)) ok("dinput8.dll is the Enhanced Edition's Xidi (controller wrapper) - the mod opens the second controller through it");
+        if (!strcmp(hex, XIDI_SHA1) || !strcmp(hex, XIDI_SHA1_B)) ok("dinput8.dll is the Enhanced Edition's Xidi (controller wrapper) - the mod opens the second controller through it");
         else if (ieq(name, "Xidi")) warn("dinput8.dll is Xidi %s, a different build than the Enhanced Edition package's. Should be fine.", ver[0] ? ver : "");
         else { fail("dinput8.dll is not the Enhanced Edition's Xidi%s%s%s%s: another input wrapper. The mod opens the second controller through this DLL.", name[0] || ver[0] ? " (" : "", name[0] ? name : "", ver[0] ? " " : "", name[0] || ver[0] ? (ver[0] ? ver : ")") : ""); n++; }
     } else warn("dinput8.dll (the Enhanced Edition's Xidi controller wrapper) is not here: the second controller is opened through Windows' own dinput8 instead. Usually fine.");

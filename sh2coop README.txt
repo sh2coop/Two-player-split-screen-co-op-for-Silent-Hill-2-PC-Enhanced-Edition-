@@ -46,7 +46,10 @@ INSTALL (one click)
   stop the install - they cannot be told apart from the Enhanced Edition's own files reliably - the
   rule above still applies to them.
 
-  To UPDATE: unzip the new version and run its Install co-op.exe again (choose U).
+  To UPDATE (from P33x on): in the game, Options > Game Options > Co-op Options > Updates, press Enter.
+              The mod asks the mod's GitHub page for the newest version; if there is one, press Enter
+              again to install it, then quit and restart the game. Your sh2coop.ini settings are kept.
+              (Or, as before: unzip the new version and run its Install co-op.exe again, choose U.)
   To REMOVE:  run Install co-op.exe again and choose R - it deletes the mod's own files and sets
               LoadPlugins back as it was. (Or just rename sh2coop.asi to sh2coop.asi.off.)
 
@@ -104,6 +107,17 @@ CONTROLS
   F10 ................... writes a STATUS line into sh2coop.log - press it when something odd happens,
                           it helps us find the cause.
 
+UPDATES (Co-op Options > Updates)
+  Nothing is downloaded unless you press Enter on that row. Then the mod reads the newest release of the
+  mod on GitHub (github.com/sh2coop/Two-player-split-screen-co-op-for-Silent-Hill-2-PC-Enhanced-Edition-)
+  and installs it only if all of these hold: the release's file list carries the mod authors' signature
+  (a list changed by anyone else is refused), it is a newer build than yours, and every downloaded file
+  matches that list exactly. It replaces only the mod's own files (sh2coop.asi, sh2coop_check.exe,
+  "sh2coop README.txt", "sh2coop VERSION.txt") - never sh2coop.ini, your saves or any game file. The old
+  files are kept as *.old until the next start, then removed. If anything fails, nothing is changed and
+  the row says why. Under C:\Program Files Windows does not let a game write its own folder: update with
+  Install co-op.exe ("Run as administrator") instead.
+
 SETTINGS (sh2coop.ini, next to the mod)
   [input] james1 / james2 = auto | keyboard | pad1 | pad2 | keyboard+pad1 | keyboard+pad2
   [split] layout = side | top | off
@@ -125,10 +139,16 @@ IF SOMETHING GOES WRONG
   the game folder: ...". With the second one, move those files out and try again before reporting.
   Then send us sh2coop.log (from the game folder; the previous run is kept as "sh2coop - <date> <time>.log")
   and sh2coop_check.txt, and say what you were doing. The mod never changes files on your disk: the
-  only things it writes are those logs and its own ini. (If we ask you to set texture_dumps = 1 in
+  only things it writes are those logs and its own ini - and, when you ask for an update on the Updates
+  row, its own files. (If we ask you to set texture_dumps = 1 in
   sh2coop.ini for a jacket-colour problem, it also writes a few sh2coop_dump_*.dds snapshots of
   James's textures into the game folder; they are for troubleshooting only and safe to delete.)
 
 NOT INCLUDED, ON PURPOSE
   This zip contains none of the Enhanced Edition's or Konami's files. The co-op title screen is drawn
   at run time from the title files your own Enhanced Edition already has.
+
+CREDITS
+  The mod's code (the co-op, the installer, the checker and the in-game updater) was written largely with
+  Claude, Anthropic's AI model, working with the project's author, who directed the work, tested every
+  build in the game and decided what goes in.

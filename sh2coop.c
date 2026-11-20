@@ -1,5 +1,9 @@
 /*
- * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33v
+ * sh2coop.asi  --  Silent Hill 2 PC (Enhanced Edition exe v1.0) two-player co-op.   PC build P33x
+ * P33x: updates now come from github.com/sh2coop/Two-player-split-screen-co-op-for-Silent-Hill-2-PC-Enhanced-Edition-
+ *       (the repository moved back there); the checker also knows the Xidi build the EE setup 1.1.8 installs.
+ * P33w: UPDATES from the game: Options > Game Options > Co-op Options > Updates asks GitHub for the newest release
+ *   (sh2coop_upd.c: signed manifest, every file's SHA-256 checked, the mod's own files swapped in, restart to finish).
  * Built from sh2coop.c + sh2coop_d9.c (the Direct3D 9 part of the split screen) + sh2coop_title.c (the title screen):
  *   i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c -ldinput8 -ldxguid
  *
@@ -91,6 +95,7 @@
 #include <stddef.h>
 #include "sh2coop_ce.h"
 #include "sh2coop_chr.h"
+#include "sh2coop_upd.h"
 static int s_chr_sel[2];                     /* CS: character per James (CHR_JAMES = normal) */
 
 typedef unsigned char u8;
@@ -956,9 +961,18 @@ static void __cdecl opt_handler_hook(void)
         return;
     }
     if (cancel_hit) { s_coop_page = 0; F_SFX(SND_ENTER, 1.0f, 0); Log("menu: co-op options closed"); return; }
-    /* rows: 0 James 1, 1 James 2, 2 Split screen (P33), 3 Appearance (CE) */
-    if (F_VIN_HELD(0, 0x8000002, 0) || F_VIN_EDGE(2)) { s_coop_sel = (s_coop_sel + 1) % 4; F_SFX(SND_MOVE, 1.0f, 0); }
-    else if (F_VIN_HELD(0, 0x4000001, 0) || F_VIN_EDGE(1)) { s_coop_sel = (s_coop_sel + 3) % 4; F_SFX(SND_MOVE, 1.0f, 0); }
+    /* rows: 0 James 1, 1 James 2, 2 Split screen (P33), 3 Appearance (CE), 4 Updates (P33w) */
+    if (F_VIN_HELD(0, 0x8000002, 0) || F_VIN_EDGE(2)) { s_coop_sel = (s_coop_sel + 1) % 5; F_SFX(SND_MOVE, 1.0f, 0); }
+    else if (F_VIN_HELD(0, 0x4000001, 0) || F_VIN_EDGE(1)) { s_coop_sel = (s_coop_sel + 4) % 5; F_SFX(SND_MOVE, 1.0f, 0); }
+    else if (s_coop_sel == 4) {                                   /* P33w: Enter = check; Enter again on a newer build = install */
+        static DWORD s_upd_last;                                  /* a fresh press only (no auto-repeat), at most one a second */
+        if ((F_VIN_EDGE(0x10) || F_VIN_EDGE(0x200)) && GetTickCount() - s_upd_last > 1000) {
+            s_upd_last = GetTickCount();
+            int st = upd_state();
+            if (st == UPD_AVAILABLE) { upd_install(); F_SFX(SND_ENTER, 1.0f, 0); Log("menu: update to %s started", upd_remote()); }
+            else if (st == UPD_IDLE || st == UPD_CURRENT || st == UPD_FAILED) { upd_check(); F_SFX(SND_ENTER, 1.0f, 0); Log("menu: update check started"); }
+        }
+    }
     else if (s_coop_sel == 3 && (menu_confirm() || F_VIN_HELD(0, 0x1000008, 0) || F_VIN_EDGE(8))) {
         s_coop_page = 2; s_app_sel = 1; s_app_yaw = 3.14159265f; F_SFX(SND_ENTER, 1.0f, 0); Log("menu: appearance opened (preview %s)", ce_preview_status());
     }
@@ -1072,12 +1086,28 @@ static void __cdecl opt_draw_hook(void)
         menu_text("Clothes and hair colours", CO_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, sel ? 0xFF : 0x60);
         if (sel) menu_text("Clothes and hair colours", CO_VALUE_X - 2, y, 0, 0x3F, 0x3F, 0x3F, 0xFF);
     }
+    {   /* P33w: Updates row (row 5) */
+        char val[64]; int st = upd_state(), y = 0x64 + 0x1B * 5, sel = s_coop_sel == 4;
+        switch (st) {
+        case UPD_CHECKING:   strcpy(val, "Checking..."); break;
+        case UPD_CURRENT:    strcpy(val, "Up to date (" SH2COOP_BUILD ")"); break;
+        case UPD_AVAILABLE:  snprintf(val, sizeof val, "%s available", upd_remote()); break;
+        case UPD_INSTALLING: snprintf(val, sizeof val, "Installing %s...", upd_remote()); break;
+        case UPD_DONE:       snprintf(val, sizeof val, "%s installed", upd_remote()); break;
+        case UPD_FAILED:     strcpy(val, "Not updated"); break;
+        default:             strcpy(val, "This is " SH2COOP_BUILD); break;
+        }
+        menu_text("Updates", CO_LABEL_X, y, 0x200, 0x3F, 0x3F, 0x3F, 0x60);
+        if (sel) menu_text("Updates", CO_LABEL_X - 2, y, 0x200, 0x3F, 0x3F, 0x3F, 0xFF);
+        menu_text(val, CO_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, sel || st == UPD_AVAILABLE || st == UPD_DONE ? 0xFF : 0x60);
+        if (sel) menu_text(val, CO_VALUE_X - 2, y, 0, 0x3F, 0x3F, 0x3F, 0xFF);
+    }
     /* which physical controller is which: holding any button lights its row up */
     int held = pad_held_now();
     { static DWORD last; DWORD t = GetTickCount(); if (t - last > 2000) { last = t; s_padnames_tried = 0; load_padnames(); } }
     for (int i = 0; i < 2; i++) {
         char label[24], value[40]; sprintf(label, "Controller %d", i + 1);
-        int y = 0x64 + 0x1B * (i + 5), on = held == i + 1;
+        int y = 0x64 + 0x1B * (i + 6), on = held == i + 1;
         XGP g; int present = read_pad(i, &g);
         if (i < s_padnames) {
             const char *n = s_padname[i];
@@ -1090,7 +1120,8 @@ static void __cdecl opt_draw_hook(void)
         menu_text(value, CO_VALUE_X, y, 0, 0x3F, 0x3F, 0x3F, on ? 0xFF : 0x60);
     }
     const char *help;
-    if (s_coop_sel == 3) help = "Press Enter: colours for James 1 and James 2";
+    if (s_coop_sel == 4) help = upd_state() == UPD_IDLE ? "Press Enter: look for a newer version" : upd_message();
+    else if (s_coop_sel == 3) help = "Press Enter: colours for James 1 and James 2";
     else if (s_coop_sel == 2) help = s_split_cfg == SPLIT_OFF ? "One screen for both, James 1's camera" : "F8 or L3+R3 in game also switch it";
     else if (!src_works(s_asg[s_coop_sel])) help = s_coop_sel ? "That controller is not plugged in" : "Unplugged: James 1 uses the keyboard";
     else if (held) help = "Lit row = the controller you hold";
@@ -4013,14 +4044,15 @@ static int keep_old_log(const char *path, char *kept, int n)
 }
 static void install(HMODULE self)
 {
-    char path[MAX_PATH]; GetModuleFileNameA(self, path, MAX_PATH);
+    char path[MAX_PATH], path_self[MAX_PATH]; GetModuleFileNameA(self, path, MAX_PATH); strcpy(path_self, path);
     strcpy(s_dir, path); { char *sl = strrchr(s_dir, '\\'); if (sl) sl[1] = 0; else s_dir[0] = 0; }
     chr_set_dir(s_dir);
     char *dot = strrchr(path, '.'); if (dot) strcpy(dot, ".log");
     char kept[MAX_PATH + 64]; int kept_ok = keep_old_log(path, kept, sizeof kept);
     s_log = fopen(path, "w");
-    Log("sh2coop PC build P33v loaded (P33u + a James playing as another character is plain James in cutscenes)");
+    Log("sh2coop PC build " SH2COOP_BUILD " loaded (P33w + updates from the sh2coop GitHub repository)");
     if (kept_ok) Log("the previous log was kept as \"%s\"", kept);
+    upd_init(s_dir, path_self, Log);                                /* P33w: removes what the last update left (before the scan below) */
     log_other_code();
     AddVectoredExceptionHandler(1, crash_handler);
     const char *xi[] = { "xinput1_4.dll", "xinput1_3.dll", "xinput9_1_0.dll" };

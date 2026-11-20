@@ -5,7 +5,7 @@
 set -e
 cd "$(dirname "$0")"
 mkdir -p out/stage
-i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -o out/sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c sh2coop_ce.c sh2coop_chr.c -ldinput8 -ldxguid
+i686-w64-mingw32-gcc -O2 -Wall -shared -static-libgcc -s -o out/sh2coop.asi sh2coop.c sh2coop_d9.c sh2coop_title.c sh2coop_ce.c sh2coop_chr.c sh2coop_upd.c -ldinput8 -ldxguid -lwinhttp
 i686-w64-mingw32-gcc -O2 -Wall -Wextra -s -mconsole -static-libgcc -o "out/Install co-op.exe" sh2coop_setup.c -ladvapi32 -lole32 -lshell32
 i686-w64-mingw32-gcc -O2 -Wall -Wextra -s -mconsole -static-libgcc -DCHECK_ONLY -o out/sh2coop_check.exe sh2coop_setup.c -ladvapi32
 BUILD=$(strings out/sh2coop.asi | grep -o 'sh2coop PC build [A-Za-z0-9]*' | head -1 | awk '{print $4}')
@@ -23,3 +23,6 @@ sed -i 's/\r$//; s/$/\r/' "$ST/README.txt" "$ST/sh2coop.ini"
 ZIP="out/SH2 co-op mod $BUILD.zip"; rm -f "$ZIP"
 (cd "$ST" && zip -q -X "../../$ZIP" "Install co-op.exe" sh2coop.asi sh2coop.ini sh2coop_check.exe README.txt VERSION.txt)
 echo "built: $ZIP"; unzip -l "$ZIP"
+# the release assets for the in-game updater (signed with the release key, which is not in this repository):
+#   python3 make_update_release.py out/stage out/release <release key .pem>
+# or all in one (commit + push + signed release, draft unless --publish):  ./publish.sh <release key .pem> "what changed"

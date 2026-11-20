@@ -39,6 +39,7 @@ and make sure it runs. Note where the game is installed: the folder that contain
 Click the green **Code** button at the top of this page, then **Download ZIP**. Unzip it anywhere – your
 Downloads folder is fine. Inside the unzipped folder you will find **Install co-op.exe** next to the
 mod's files (`sh2coop.asi`, `sh2coop.ini`, `sh2coop_check.exe`, `VERSION.txt`) and the source code.
+(You only do this once: later versions install from inside the game, see "To update" below.)
 
 **3. Run the installer.**
 Double-click **Install co-op.exe**.
@@ -64,7 +65,10 @@ Edition's `d3d8.ini` (`LoadPlugins = 1`, with a backup kept as `d3d8.ini.bak-bef
 touches saves or game files, and it stops before changing anything if it finds other plugins or DLLs the
 Enhanced Edition does not ship.
 
-**To update:** download the new zip, unzip it, run its `Install co-op.exe` again and choose **U**.
+**To update:** from build P33x on, in the game: **Options > Game Options > Co-op Options > Updates**,
+press Enter; if a newer version exists, press Enter again, then restart the game. Your settings are kept.
+(If your copy is older than P33x, or the Updates row says it found nothing although a newer release is listed
+on this page: download the ZIP again as in step 2, run its `Install co-op.exe` and choose **U** – once.)
 **To remove:** run `Install co-op.exe` again and choose **R** – it deletes the mod's own files and sets
 `LoadPlugins` back as it was. (Or just rename `sh2coop.asi` to `sh2coop.asi.off`.)
 
@@ -83,6 +87,7 @@ The full player instructions (every control, every setting, troubleshooting) are
 | Swap the two players' devices / reset to auto | `F6` / `F7` |
 | Write a status line into the log | `F10` (press it when something odd happens) |
 | Clothes and hair colours, play as Maria / Eddie / Angela | Options > Game Options > Co-op Options > **Appearance** |
+| Update the mod | Options > Game Options > Co-op Options > **Updates** (Enter = check, Enter again = install) |
 
 Who controls whom: with the default `auto` setting, the device that presses **join** becomes James 2's;
 James 1 keeps the rest. So with keyboard + one controller, whoever presses join on the controller is
@@ -167,6 +172,37 @@ and `VERSION.txt` are committed here too, so that "Download ZIP" gives players a
 - `sh2coop_title.c` – the co-op title screen. The CO-OP lettering and the recoloured background are
   made at run time from the player's own Enhanced Edition title files; no artwork is shipped.
 - `sh2coop_setup.c` – `Install co-op.exe` (default) and `sh2coop_check.exe` (`-DCHECK_ONLY`).
+- `sh2coop_upd.c` – the in-game updater (the Updates row): reads `sh2coop-manifest.txt` and its signature
+  `sh2coop-manifest.sig` from the newest release (`releases/latest/download/…`), checks the signature
+  (ECDSA P-256 over the manifest's bytes, with Windows' own bcrypt; the public key is in the source),
+  downloads the files the manifest lists, checks each SHA-256, and swaps them in (the running
+  `sh2coop.asi` is renamed to `.old`, removed at the next start). Only the mod's own four files can be
+  written; `sh2coop.ini` never.
+- `make_update_release.py` – makes a release's assets from `out/stage`: the files, the manifest and its
+  signature (needs Python's `cryptography` and the release key, which is not in this repository). The
+  release's tag must be the build name.
+
+## Updates and releases
+
+Every build is published as a GitHub Release whose tag is the build name (e.g. `P33x`), with the assets
+`make_update_release.py` writes: `sh2coop.asi`, `sh2coop_check.exe`, `sh2coop-README.txt`,
+`sh2coop-VERSION.txt`, `sh2coop-manifest.txt`, `sh2coop-manifest.sig` (what the game's Updates row
+uses). The same build's files are committed to the repository too, so "Download ZIP" always gives the
+newest version for a first install. A manifest that is not
+signed with the release key is refused by the game, so a changed release cannot reach players.
+
+Making a release: `./build.sh`, then `./publish.sh <release key .pem> "what changed"`. It commits the
+sources and binaries, pushes them, signs the manifest and creates the GitHub Release as a draft (add
+`--publish` to make it live at once). The release key is kept outside the repository and never uploaded.
+Without command-line access the same can be done on the website: upload the changed files (Add file >
+Upload files), then Releases > Draft a new release with the build name as the tag, attach the six files
+from `out/release`, and publish.
+
+## Credits
+
+The mod's code – the co-op itself, the installer, the checker and the in-game updater – was written
+largely with Claude, Anthropic's AI model, working with the project's author, who directed the work,
+tested every build in the game and decided what goes in.
 
 ## Legal
 
